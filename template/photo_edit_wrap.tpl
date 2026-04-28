@@ -1,0 +1,1 @@
+{$OSM_PHOTO_EDIT_HTML}
