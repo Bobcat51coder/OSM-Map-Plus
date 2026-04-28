@@ -1,7 +1,6 @@
-# OSM-Map-Plus — Plugin Piwigo
-Open Street Map plugin enhancement  pour Piwigo
 Ce plugin est distribué sous licence [GNU GPL v2](LICENSE).
 
+# OSM Map Enhanced — Plugin Piwigo
 
 Affiche une carte OpenStreetMap interactive sur votre galerie Piwigo, avec toutes les photos géolocalisées (GPS).
 
