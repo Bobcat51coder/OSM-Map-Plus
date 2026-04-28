@@ -1,0 +1,463 @@
+/* ── Neutralisation hauteur forcée par le thème ou osmmap_plus.tpl ── */
+/* Sur la page galerie, le container s'adapte à son contenu (carte + header + footer) */
+#osm-map-container.osm-map-wrapper {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+/* OSM Map Enhanced for Piwigo - map.css v2.0.4 */
+
+/* ── Conteneur ──────────────────────────────────────────── */
+#osm-map-container {
+  box-sizing: border-box;
+  margin: 20px 0;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-left: 12px solid #ddd;   /* bordure latérale : passage curseur sans activer la carte */
+  border-right: 12px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: inherit;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  /* La hauteur totale est définie par JS = hauteur carte + header + footer */
+}
+
+/* ── En-tête ────────────────────────────────────────────── */
+.osm-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.osm-title {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.osm-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.osm-controls label {
+  font-size: 0.83rem;
+  color: #555;
+  white-space: nowrap;
+}
+
+.osm-controls select,
+.osm-controls input[type="text"] {
+  font-size: 0.85rem;
+  padding: 5px 9px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #fff;
+  height: 32px;
+}
+
+.osm-controls select  { min-width: 160px; cursor: pointer; }
+#osm-geocoder         { width: 200px; }
+
+.osm-controls button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #bbb;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.osm-controls button:hover,
+.osm-controls button.active {
+  background: #e8f0fe;
+  border-color: #4a90d9;
+  color: #1a73e8;
+}
+
+/* ── Géocodeur dropdown ─────────────────────────────────── */
+.osm-geocoder-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.osm-geocoder-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1100;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.15);
+  max-height: 260px;
+  overflow-y: auto;
+  min-width: 300px;
+}
+
+.osm-geo-item {
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  line-height: 1.3;
+}
+.osm-geo-item:hover  { background: #f0f6ff; }
+.osm-geo-empty       { color: #888; cursor: default; }
+
+/* ── Corps carte + panneau ──────────────────────────────── */
+.osm-body {
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  padding: 0 8px;
+  background: #f0f0f0;
+  flex-shrink: 0;
+  /* Hauteur stricte = celle de #osm-map (définie via JS) — empêche le panel de pousser le body */
+  align-items: stretch;
+}
+
+#osm-map {
+  flex: 1;
+  min-height: 300px;
+  z-index: 1;
+  transition: all .3s ease;
+  /* La carte prend tout l'espace MOINS les marges de osm-body */
+  border-radius: 2px;
+}
+
+/* ── Panneau latéral ────────────────────────────────────── */
+.osm-panel {
+  width: 0;
+  overflow: hidden;
+  border-left: 0 solid #e0e0e0;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  transition: width .3s ease, border-left-width .3s ease;
+  flex-shrink: 0;
+  max-height: 100%;
+  position: relative;
+}
+
+.osm-panel.osm-panel-open {
+  width: 280px;
+  border-left-width: 1px;
+}
+
+.osm-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: #eef0f3;
+  border-bottom: 1px solid #ddd;
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+#osm-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #666;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+#osm-panel-close:hover { background: #ddd; }
+
+.osm-panel-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Item du panneau ────────────────────────────────────── */
+.osm-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #ebebeb;
+  transition: background .12s;
+  cursor: pointer;
+}
+
+.osm-panel-item:hover { background: #eef4ff; }
+
+.osm-panel-item.active {
+  background: #deeaff;
+  border-left: 3px solid #1a73e8;
+  padding-left: 7px;
+}
+
+/* Lien miniature */
+.osm-pi-thumb-link {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+/* Lien infos - occupe le reste */
+a.osm-pi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+a.osm-pi-info:hover .osm-pi-name { text-decoration: underline; color: #1a73e8; }
+
+/* Miniature dans le panneau */
+.osm-pi-thumb {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #e8e8e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.osm-pi-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Infos dans le panneau */
+.osm-pi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.osm-pi-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.osm-pi-album,
+.osm-pi-date {
+  font-size: 0.75rem;
+  color: #777;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Pied ────────────────────────────────────────────────── */
+.osm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  color: #666;
+  background: #f5f6f8;
+  border-top: 1px solid #e0e0e0;
+}
+
+.osm-stats strong { color: #333; }
+
+/* ── Popups Leaflet ─────────────────────────────────────── */
+.leaflet-container { z-index: 400; font-family: inherit; }
+.leaflet-popup     { z-index: 500; }
+.leaflet-popup-content { margin: 10px 12px; }
+
+/* ── Mini-carte page photo ──────────────────────────────── */
+.osm-photo-map-wrapper {
+  margin: 16px 0;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,.07);
+}
+.osm-photo-map-title {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e0e0e0;
+}
+.osm-photo-coords {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  color: #666;
+  background: #fafafa;
+}
+.osm-photo-coords a { color: #1a73e8; margin-left: 8px; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .osm-header     { flex-direction: column; align-items: flex-start; }
+  #osm-geocoder   { width: 140px; }
+  .osm-panel.osm-panel-open { width: 220px; }
+}
+
+@media (max-width: 480px) {
+  .osm-panel.osm-panel-open { 
+    position: absolute; right: 0; top: 0; bottom: 0;
+    z-index: 900; width: 240px;
+    box-shadow: -3px 0 12px rgba(0,0,0,.2);
+  }
+}
+
+/* ── Modale création d'album ────────────────────────────── */
+#osm-album-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 9000;
+}
+
+#osm-album-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9001;
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px 28px;
+  width: 360px;
+  max-width: 92vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,.22);
+}
+
+#osm-album-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+#osm-album-desc {
+  margin: 0 0 16px;
+  font-size: 0.88rem;
+  color: #555;
+}
+
+#osm-album-dialog label {
+  display: block;
+  font-size: 0.83rem;
+  color: #444;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+#osm-album-name {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+#osm-album-name:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26,115,232,.2);
+}
+
+#osm-album-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#osm-album-cancel {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+#osm-album-cancel:hover { background: #f5f5f5; }
+
+#osm-album-confirm {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 5px;
+  background: #1a73e8;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+#osm-album-confirm:hover { background: #1558b0; }
+
+/* Barre de progression */
+#osm-album-progress { margin-bottom: 16px; }
+
+#osm-album-bar {
+  height: 8px;
+  background: #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+#osm-album-bar-inner {
+  height: 100%;
+  background: #1a73e8;
+  border-radius: 4px;
+  width: 0%;
+  transition: width .3s ease;
+}
+#osm-album-status {
+  font-size: 0.82rem;
+  color: #555;
+}
+
+/* ── Toast notifications ────────────────────────────────── */
+.osm-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  padding: 11px 18px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  box-shadow: 0 3px 12px rgba(0,0,0,.18);
+  transition: opacity .4s ease;
+  opacity: 1;
+}
+.osm-toast-success { background: #1e8e3e; color: #fff; }
+.osm-toast-info    { background: #1a73e8; color: #fff; }
+.osm-toast-error   { background: #d93025; color: #fff; }
+
+/* Clusters */
+.marker-cluster div { display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-size:13px; font-weight:bold; color:#333; }
+.marker-cluster span { line-height:1; }
