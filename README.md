@@ -1,4 +1,4 @@
-Ce plugin est distribué sous licence [GNU GPL v2](LICENSE).
+Ce plugin est distribué sous licence [GNU GPL-2.0 ](LICENSE).
 
 # OSM Map Enhanced — Plugin Piwigo
 
@@ -60,3 +60,7 @@ MIT — libre d'utilisation, de modification et de redistribution avec mention d
 | 2.2.x | Création d'album depuis la carte |
 | 2.1.x | Correction URLs, compatibilité Safari |
 | 2.0.x | Version initiale : carte, clustering, panneau liste |
+
+## Changelog
+1.0.1 changement de numérotation version pour publication
+1.0.2 Correction de la liste des albums et recherche multicritàre lieux et album
