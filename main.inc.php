@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.0.0-2026-03-19
+Version: 1.0.2-2026-05-02
 Description: Carte OpenStreetMap pour Piwigo avec clustering, géocodeur, filtres par album, panneau liste et création d'album depuis la carte. Chargement AJAX sans limite, compatible tous thèmes.
 Plugin URI: https://github.com/Bobcat51coder/OSM-Map-Plus
 Author: Bobcat51
