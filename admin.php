@@ -1,20 +1,12 @@
 <?php
-/*
- * This file is part of [OSM-Map-Plus].
- *
- * [Nom de ton plugin] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- *
- * [Nom de ton plugin] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Nom de ton plugin].  If not, see <https://www.gnu.org/licenses/>.
- */
+<?php
+// +-----------------------------------------------------------------------+
+// | This file is part of Piwigo.                                          |
+// | This file is part of [OSM-Map-Plus].                                                                     |
+// | For copyright and license information, please view the COPYING.txt    |
+// | file that was distributed with this source code.                      |
+// +-----------------------------------------------------------------------+
+
 // OSM Map Enhanced - Page d'administration
 // Inclus par Piwigo via get_admin_plugin_menu_links → admin.php
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
