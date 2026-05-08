@@ -1,5 +1,4 @@
 <?php
-<?php
 // +-----------------------------------------------------------------------+
 // | This file is part of Piwigo.                                          |
 // | This file is part of [OSM-Map-Plus].                                                                     |
