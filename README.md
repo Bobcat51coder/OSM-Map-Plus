@@ -63,4 +63,4 @@ MIT — libre d'utilisation, de modification et de redistribution avec mention d
 
 ## Changelog
 1.0.1 changement de numérotation version pour publication
-1.0.2 Correction de la liste des albums et recherche multicritàre lieux et album
+1.0.2 Correction de la liste des albums et recherche multicritàre lieux et album correction des entêtes pour publication
