@@ -1,45 +1,40 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.0.2-2026-04-26
-Description: Carte OpenStreetMap pour Piwigo avec clustering, géocodeur, filtres par album, panneau liste et création d'album depuis la carte. Chargement AJAX sans limite, compatible tous thèmes.
-Plugin URI: https://github.com/Bobcat51coder/OSM-Map-Plus
-Author: Bobcat51
-Author URI:
+Version: auto
+Description: Carte OpenStreetMap pour Piwigo avec clustering, géocodeur, filtres par album, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
+Plugin URI: auto
+Author: Bobcat-Fr
+Author URI: 
 */
-
 // +-----------------------------------------------------------------------+
-// | OSM Map Plus - Plugin for Piwigo                                      |
+// | OSM Map Plus - Plugin for Piwigo                                      |                                                       |
 // +-----------------------------------------------------------------------+
 // | Conception, cahier des charges et tests : Bobcat-Fr                  |
 // | Développement : Claude (Anthropic) — https://claude.ai               |
 // | Librairies    : Leaflet, MarkerCluster, OpenStreetMap, Nominatim     |
-// | Licence       : GPL-2.0                                              |
+// | Licence       :LPG 2                                                |
 // +-----------------------------------------------------------------------+
 /*
- * This file is part of OSM-Map-Plus.
+ * This file is part of [OSM-Map-Plus].
  *
- * OSM-Map-Plus is free software: you can redistribute it and/or modify
+ * [Nom de ton plugin] is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * OSM-Map-Plus is distributed in the hope that it will be useful,
+ * [Nom de ton plugin] is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with OSM-Map-Plus. If not, see <https://www.gnu.org/licenses/>.
+ * along with [Nom de ton plugin].  If not, see <https://www.gnu.org/licenses/>.
  */
-
-defined('PHPWG_ROOT_PATH') or die('Accès direct interdit.');
-
-// --- Définition du plugin (DOIT correspondre au dossier : osm_map) ---
-$plugin = 'osm_map'; // Nom du dossier (obligatoire pour ton code)
-define($plugin . '_PATH', PHPWG_PLUGINS_PATH . $plugin . '/');
-define('OSM_MAP_PATH', $plugin . '_PATH'); // Rétrocompatibilité avec ton code existant
-define('OSM_MAP_VERSION', '1.0.2-2026-04-26');
+defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
+// --- Définition du plugin ---
+define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
+define('OSM_MAP_VERSION', '1.0.2');
 
 // --- Métadonnées du plugin (pour Piwigo) ---
 $plugin_info = array(
