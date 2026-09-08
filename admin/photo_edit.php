@@ -107,7 +107,7 @@ $row_tile = pwg_db_fetch_assoc($res_tile);
 $tile_geotag = $row_tile ? $row_tile['value'] : (isset($conf['osm_map_tile_geotag']) ? $conf['osm_map_tile_geotag'] : 'carto_voyager');
 
 $tiles = array(
-    'carto_voyager' => array('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', '&copy; OpenStreetMap &copy; CARTO', 19),
+    'carto_voyager' => array(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), '&copy; OpenStreetMap &copy; CARTO', 19),
     'osm_standard'  => array('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap contributors', 19),
     'esri_satellite'=> array('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Tiles &copy; Esri', 18),
     'opentopo'      => array('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap &copy; OpenTopoMap', 17),
