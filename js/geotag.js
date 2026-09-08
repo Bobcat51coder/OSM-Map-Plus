@@ -4,6 +4,12 @@
  */
 'use strict';
 
+// Clé API CartoDB (basemaps.cartocdn.com), injectée côté PHP
+function _osmCartoUrl(base) {
+  var key = window.OSM_CARTO_API_KEY || '';
+  return key ? base + '?key=' + encodeURIComponent(key) : base;
+}
+
 var OSMGeotag = (function () {
 
   var batchMap, batchMarker, batchLat, batchLon;
@@ -33,7 +39,7 @@ var OSMGeotag = (function () {
     }
 
     batchMap = L.map('osm-batch-map', { center: center, zoom: zoom });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+    L.tileLayer(_osmCartoUrl('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
       maxZoom: 19
     }).addTo(batchMap);
@@ -195,7 +201,7 @@ var OSMGeotag = (function () {
     var initZoom = lat ? 13 : 5;
 
     var editMap = L.map('osm-edit-map', { center: [initLat, initLon], zoom: initZoom });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+    L.tileLayer(_osmCartoUrl('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), {
       attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
     }).addTo(editMap);
 
@@ -264,7 +270,7 @@ OSMGeotag.initInline = function(imageId, lat, lon, apiUrl) {
     var zoom     = hasGps ? 13 : 5;
 
     var map = L.map('osm-geotag-map', { center: center, zoom: zoom });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+    L.tileLayer(_osmCartoUrl('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
         maxZoom: 19
     }).addTo(map);
