@@ -28,7 +28,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var map = L.map('osm-photo-map', { zoomControl: true }).setView([lat, lon], 14);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+  var _cartoKey = window.OSM_CARTO_API_KEY || '';
+  var _cartoUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png' + (_cartoKey ? ('?key=' + encodeURIComponent(_cartoKey)) : '');
+  L.tileLayer(_cartoUrl, {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
     maxZoom: 19
   }).addTo(map);
