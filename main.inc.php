@@ -1,9 +1,9 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: auto
+Version: 1.0.3
 Description: Carte OpenStreetMap pour Piwigo avec clustering, géocodeur, filtres par album, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
-Plugin URI: auto
+Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1073
 Author: Bobcat-Fr
 Author URI: 
 */
@@ -34,7 +34,7 @@ Author URI:
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // --- Définition du plugin ---
 define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
-define('OSM_MAP_VERSION', '1.0.2');
+define('OSM_MAP_VERSION', '1.0.3');
 
 // --- Métadonnées du plugin (pour Piwigo) ---
 $plugin_info = array(
@@ -58,6 +58,7 @@ function osmme_init_conf() {
         'osm_map_tile'        => 'carto_voyager',
         'osm_map_tile_geotag' => 'carto_voyager',
         'osm_map_hide_if_osm' => '0',
+        'osm_map_carto_api_key' => '',
     );
     foreach ($defaults as $key => $val) {
         if (!isset($conf[$key])) {
@@ -71,6 +72,18 @@ function osmme_init_conf() {
         $conf['osm_map_max_photos'] = '5000';
     }
 }
+// ── Ajoute la clé API CartoDB (si configurée) à une URL de tuile Carto ───
+// Depuis le 26/08/2026, les tuiles raster basemaps.cartocdn.com nécessitent
+// une clé API gratuite (https://carto.com/basemaps/apikey/), ajoutée en
+// paramètre ?key=VOTRE_CLE. Cf. https://docs.carto.com/faqs/carto-basemaps
+function osmme_carto_tile_url($url) {
+    global $conf;
+    $key = isset($conf['osm_map_carto_api_key']) ? trim($conf['osm_map_carto_api_key']) : '';
+    if ($key === '') return $url;
+    $sep = (strpos($url, '?') === false) ? '?' : '&';
+    return $url . $sep . 'key=' . urlencode($key);
+}
+
 // ── Lien vers la page d'administration ───────────────────────────────────
 add_event_handler('get_admin_plugin_menu_links', 'osmme_admin_menu');
 function osmme_admin_menu($menu) {
@@ -93,7 +106,7 @@ if (defined('IN_ADMIN')) {
 
 function osmme_inject_assets() {
     if (defined('OSMME_WORLDMAP_PAGE')) return;
-    global $template;
+    global $template, $conf;
     $url = get_root_url() . 'plugins/osm_map/';
     // Forcer le menu Piwigo au-dessus des cartes Leaflet
     // Ne PAS toucher aux z-index internes de Leaflet (marker, tile, etc.)
@@ -101,6 +114,11 @@ function osmme_inject_assets() {
         '<style>' .
         '.leaflet-container { z-index: 0 !important; }' .
         '</style>'
+    );
+    // Clé API CartoDB (basemaps.cartocdn.com), lue par map.js / geotag.js
+    $carto_key = isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '';
+    $template->append('head_elements',
+        '<script>window.OSM_CARTO_API_KEY=' . json_encode($carto_key) . ';</script>'
     );
     // jsDelivr = CDN plus rapide et fiable qu'unpkg pour les assets Leaflet
     $template->append('head_elements',
@@ -367,7 +385,7 @@ function osmme_inject_on_photo_page() {
         . '<script>(function(){function init(){'
         . 'if(typeof L==="undefined"){setTimeout(init,200);return;}'
         . 'var m=L.map("osm-photo-map").setView([' . $lat . ',' . $lon . '],14);'
-        . 'L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",'
+        . 'L.tileLayer("' . addslashes(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png')) . '",'
         . '{attribution:"&copy; OpenStreetMap &copy; CARTO",maxZoom:19}).addTo(m);'
         . 'L.marker([' . $lat . ',' . $lon . ']).addTo(m)'
         . '.bindPopup("<strong>' . $title . '</strong>").openPopup();'
@@ -399,7 +417,7 @@ function osmme_loc_end_element_set_unit() {
     // URLs avec {literal}{s}{/literal} etc. pour éviter l'interprétation Smarty
     // Accolades encodées pour éviter l'interprétation Smarty dans le .tpl
     $tiles_map = array(
-        'carto_voyager'  => array('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', '&copy; OpenStreetMap &copy; CARTO', 19),
+        'carto_voyager'  => array(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), '&copy; OpenStreetMap &copy; CARTO', 19),
         'osm_standard'   => array('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap contributors', 19),
         'esri_satellite' => array('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Tiles &copy; Esri', 18),
         'opentopo'       => array('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap &copy; OpenTopoMap', 17),

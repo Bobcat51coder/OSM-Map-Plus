@@ -41,6 +41,7 @@ if (isset($_POST['submit_osm'])) {
     conf_update_param('osm_map_tile',       $tile);
     conf_update_param('osm_map_tile_geotag',$tile_geotag);
     conf_update_param('osm_map_hide_if_osm', !empty($_POST['osm_map_hide_if_osm']) ? '1' : '0');
+    conf_update_param('osm_map_carto_api_key', trim($_POST['osm_map_carto_api_key'] ?? ''));
 
     $infos[] = 'Options enregistrées.';
 }
@@ -54,6 +55,7 @@ $osm_zoom        = isset($conf['osm_map_zoom'])        ? (int)$conf['osm_map_zoo
 $osm_tile        = isset($conf['osm_map_tile'])        ? $conf['osm_map_tile']             : 'carto_voyager';
 $osm_tile_geotag  = isset($conf['osm_map_tile_geotag']) ? $conf['osm_map_tile_geotag']      : 'carto_voyager';
 $osm_hide_if_osm  = isset($conf['osm_map_hide_if_osm'])  && $conf['osm_map_hide_if_osm'] == '1';
+$osm_carto_api_key = isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '';
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 $res      = pwg_query('SELECT COUNT(*) AS nb FROM ' . IMAGES_TABLE . ' WHERE latitude IS NOT NULL AND latitude <> 0');
@@ -198,6 +200,17 @@ ob_start();
         <input type="checkbox" name="osm_map_hide_if_osm" value="1" <?= $osm_hide_if_osm ? 'checked' : '' ?>>
         Masquer notre carte si piwigo-openstreetmap est actif
       </label>
+    </div>
+  </div>
+
+  <!-- Clé API CartoDB -->
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Clé API CartoDB</strong>
+      <p class="description">Depuis le 26/08/2026, les fonds de carte « CartoDB Voyager » nécessitent une clé API gratuite. Obtenez la vôtre sur <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noopener">carto.com/basemaps/apikey</a>, puis collez-la ici. Laissez vide pour les autres fonds de carte (OpenStreetMap, Satellite, OpenTopo), qui n'en ont pas besoin.</p>
+    </div>
+    <div class="osm-admin-field">
+      <input type="text" name="osm_map_carto_api_key" value="<?= htmlspecialchars($osm_carto_api_key) ?>" placeholder="Votre clé CartoDB" style="width:320px;max-width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:3px;">
     </div>
   </div>
 

@@ -46,7 +46,7 @@ $nb   = (int)$count_row['nb'];
 $root = get_root_url();
 
 $tiles = array(
-    'carto'     => array('label' => 'Carto Voyager',  'url' => 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',   'attr' => '&copy; OpenStreetMap &copy; CARTO'),
+    'carto'     => array('label' => 'Carto Voyager',  'url' => osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'),   'attr' => '&copy; OpenStreetMap &copy; CARTO'),
     'osm'       => array('label' => 'OpenStreetMap',  'url' => 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                     'attr' => '&copy; OpenStreetMap contributors'),
     'satellite' => array('label' => 'Satellite Esri', 'url' => 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'attr' => 'Tiles &copy; Esri'),
     'topo'      => array('label' => 'OpenTopoMap',    'url' => 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',                       'attr' => '&copy; OpenStreetMap &copy; OpenTopoMap'),
@@ -87,6 +87,7 @@ $photos_script = '<script>'
     . 'window.OSM_PHOTO_URL="' . $root . 'plugins/osm_map/osmme-photo.php";'
     . 'window.OSM_API_URL=\'' . $api_url . '\';'
     . 'window.OSM_IS_ADMIN=' . $is_admin . ';'
+    . 'window.OSM_CARTO_API_KEY=' . json_encode(isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '') . ';'
     . '</script>';
 
 $template->set_filename('osmmap_plus', dirname(__FILE__) . '/template/osmmap_plus.tpl');
