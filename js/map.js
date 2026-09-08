@@ -14,9 +14,13 @@ var OSMMap = (function () {
   var apiUrl        = '';
 
   // ── Fonds de carte ─────────────────────────────────────────────────────
+  // Depuis le 26/08/2026, les tuiles CartoDB nécessitent une clé API gratuite
+  // (https://carto.com/basemaps/apikey/), injectée côté PHP dans window.OSM_CARTO_API_KEY
+  var _cartoKey = window.OSM_CARTO_API_KEY || '';
+  var _cartoSuffix = _cartoKey ? ('?key=' + encodeURIComponent(_cartoKey)) : '';
   var TILES = {
     carto_voyager: {
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png' + _cartoSuffix,
       attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
       maxZoom: 19
     },
