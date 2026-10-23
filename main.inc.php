@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.0.6
-Description: Carte OpenStreetMap pour Piwigo avec clustering, géocodeur, filtres par album, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
+Version: 1.0.7
+Description: Carte OpenStreetMap pour Piwigo : clustering, géocodeur, filtres par album, choix de fonds de carte (OpenFreeMap, satellite + noms, OSM France…), vue 3D, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1073
 Author: Bobcat-Fr
 Author URI: 
@@ -13,29 +13,31 @@ Has Settings: true
 // +-----------------------------------------------------------------------+
 // | Conception, cahier des charges et tests : Bobcat-Fr                  |
 // | Développement : Claude (Anthropic) — https://claude.ai               |
-// | Librairies    : Leaflet, MarkerCluster, OpenStreetMap, Nominatim     |
-// | Licence       :LPG 2                                                |
+// | Librairies    : Leaflet, MarkerCluster, MapLibre GL, OpenStreetMap   |
+// | Licence       : GPL 2                                               |
 // +-----------------------------------------------------------------------+
 /*
- * This file is part of [OSM-Map-Plus].
+ * This file is part of OSM Map Plus.
  *
- * [Nom de ton plugin] is free software: you can redistribute it and/or modify
+ * OSM Map Plus is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * [Nom de ton plugin] is distributed in the hope that it will be useful,
+ * OSM Map Plus is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with [Nom de ton plugin].  If not, see <https://www.gnu.org/licenses/>.
+ * along with OSM Map Plus.  If not, see <https://www.gnu.org/licenses/>.
  */
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // --- Définition du plugin ---
 define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
-define('OSM_MAP_VERSION', '1.0.6');
+define('OSM_MAP_VERSION', '1.0.7');
+// Paramètre anti-cache des fichiers JS/CSS (change à chaque mise à jour des fichiers)
+define('OSM_MAP_ASSET_V', OSM_MAP_VERSION . '.' . (int)@filemtime(__FILE__));
 
 // --- Métadonnées du plugin (pour Piwigo) ---
 $plugin_info = array(
@@ -51,6 +53,8 @@ $plugin_info = array(
 add_event_handler('init', 'osmme_init_conf');
 function osmme_init_conf() {
     global $conf;
+    // Fichiers de langue du plugin (language/<code>/plugin.lang.php)
+    load_language('plugin.lang', OSM_MAP_PATH);
     $defaults = array(
         'osm_map_public'      => '0',
         'osm_map_height'      => '500',
@@ -58,6 +62,11 @@ function osmme_init_conf() {
         'osm_map_zoom'        => '5',
         'osm_map_tile'        => 'carto_voyager',
         'osm_map_tile_geotag' => 'carto_voyager',
+        'osm_map_tile_edit'   => 'carto_voyager',
+        'osm_map_edit_height' => '400',
+        'osm_map_unit_height' => '280',
+        'osm_map_tile_photo'  => 'carto_voyager',
+        'osm_map_photo_height' => '220',
         'osm_map_hide_if_osm' => '0',
         'osm_map_carto_api_key' => '',
     );
@@ -121,6 +130,21 @@ if (defined('IN_ADMIN')) {
     include_once(dirname(__FILE__).'/admin/admin_boot.php');
 }
 
+
+// ── Chargeur Leaflet unique ──────────────────────────────────────────────
+// Évite les conflits avec d'autres plugins de cartes (ex. piwigo-openstreetmap) : on n'injecte plus
+// notre propre Leaflet dans <head>. Une fois la page chargée, on réutilise le L global s'il existe,
+// sinon on charge Leaflet (et MarkerCluster si besoin) ; il n'y a ainsi qu'une seule instance de Leaflet.
+function osmme_loader_js() {
+    return "window.osmmeLeaflet=window.osmmeLeaflet||function(nc,cb){"
+        . "var LJS='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js',"
+        . "MJS='https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';"
+        . "function ld(s,n){var e=document.createElement('script');e.src=s;e.onload=n;e.onerror=n;document.head.appendChild(e);}"
+        . "function st2(){if(nc&&window.L&&!window.L.markerClusterGroup){ld(MJS,cb);}else{cb();}}"
+        . "function go(){if(window.L&&window.L.map){st2();}else{ld(LJS,st2);}}"
+        . "if(document.readyState==='complete'){go();}else{window.addEventListener('load',go);}};";
+}
+
 function osmme_inject_assets() {
     if (defined('OSMME_WORLDMAP_PAGE')) return;
     global $template, $conf;
@@ -130,6 +154,7 @@ function osmme_inject_assets() {
     $template->append('head_elements',
         '<style>' .
         '.leaflet-container { z-index: 0 !important; }' .
+        '.leaflet-container .leaflet-tile{opacity:1!important;visibility:visible!important;max-width:none!important;max-height:none!important;}.leaflet-tile-pane{opacity:1!important;visibility:visible!important;}' .
         '</style>'
     );
     // Clé API CartoDB (basemaps.cartocdn.com), lue par map.js / geotag.js
@@ -142,9 +167,10 @@ function osmme_inject_assets() {
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />' . "\n" .
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />' . "\n" .
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />' . "\n" .
-        '<link rel="stylesheet" href="' . $url . 'css/map.css?v=' . OSM_MAP_VERSION . '" />' . "\n" .
-        '<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>' . "\n" .
-        '<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>'
+        '<link rel="stylesheet" href="' . $url . 'css/map.css?v=' . OSM_MAP_ASSET_V . '" />' . "\n" .
+        // Leaflet n'est plus chargé ici : osmmeLeaflet() réutilise le Leaflet déjà présent (autre plugin) ou charge le sien,
+        // pour qu'une seule instance de Leaflet existe sur la page (conflit avec piwigo-openstreetmap)
+        '<script>' . osmme_loader_js() . '</script>'
     );
 }
 
@@ -312,10 +338,11 @@ function osmme_inject_map_block() {
     // Les photos sont chargées via osmme-points.php (AJAX) — pas de JSON inline
     $photos = array();
 
-    $js_url = $root . 'plugins/osm_map/js/map.js?v=' . OSM_MAP_VERSION;
+    $js_url = $root . 'plugins/osm_map/js/map.js?v=' . OSM_MAP_ASSET_V;
 
     // Bouton "Créer album" uniquement pour les utilisateurs connectés
-    $btn_album = $is_logged
+    // « Créer album » : administrateurs uniquement (les autres utilisateurs ne voient que la carte et la liste)
+    $btn_album = (function_exists('is_admin') && is_admin())
         ? '&nbsp;<button id="osm-btn-album" title="Créer un album avec les photos visibles">&#128194; Créer album</button>'
         : '';
 
@@ -372,6 +399,7 @@ function osmme_inject_map_block() {
         . 'window.OSM_POINTS_URL="' . $root . 'plugins/osm_map/osmme-points.php' . ($cat_id > 0 ? '?cat_id=' . $cat_id : '') . '";'
         . 'window.OSM_PHOTO_URL="' . $root . 'plugins/osm_map/osmme-photo.php";'
         . 'window.OSM_ROOT="' . $root . '";'
+        . 'window.OSM_IS_ADMIN=' . ((function_exists('is_admin') && is_admin()) ? 'true' : 'false') . ';'
         . 'window.OSM_API_URL="' . $api_url . '";'
         . '</script>'
         . '<script src="' . $js_url . '"></script>'
@@ -393,20 +421,34 @@ function osmme_inject_on_photo_page() {
     $lon   = (float)$picture['current']['longitude'];
     $title = htmlspecialchars(isset($picture['current']['name']) ? $picture['current']['name'] : '', ENT_QUOTES);
 
+    // Réglages : fond par défaut et hauteur (Paramètres du plugin)
+    global $conf;
+    $photo_height = isset($conf['osm_map_photo_height']) ? max(150, min(800, (int)$conf['osm_map_photo_height'])) : 220;
+    $photo_tile   = isset($conf['osm_map_tile_photo']) ? $conf['osm_map_tile_photo'] : 'carto_voyager';
+    $plugin_url   = get_root_url() . 'plugins/osm_map/';
+
     $html = '<div class="osm-photo-map-wrapper">'
-        . '<h4 class="osm-photo-map-title">&#128205; Localisation</h4>'
-        . '<div id="osm-photo-map" style="height:220px;width:100%;"></div>'
+        . '<h4 class="osm-photo-map-title">&#128205; Localisation'
+        . ' <select id="osm-photo-basemap" title="Fond de carte" style="margin-left:10px;font-size:0.8rem;padding:2px 6px;border:1px solid #ccc;border-radius:4px;"></select>'
+        . ' <button type="button" id="osm-photo-3d" title="Ouvrir la carte en relief 3D dans un nouvel onglet" style="margin-left:6px;font-size:0.8rem;padding:2px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#127956;&#65039; 3D</button></h4>'
+        . '<div id="osm-photo-map" style="height:' . $photo_height . 'px;width:calc(100% - 60px);margin:0 30px;box-sizing:border-box;"></div>'
         . '<div class="osm-photo-coords">' . $lat . ', ' . $lon
         . ' &nbsp;<a href="https://www.openstreetmap.org/?mlat=' . $lat . '&mlon=' . $lon . '&zoom=14"'
         . ' target="_blank" rel="noopener">Voir sur OpenStreetMap &#8599;</a></div></div>'
+        . '<script src="' . $plugin_url . 'js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>'
         . '<script>(function(){function init(){'
-        . 'if(typeof L==="undefined"){setTimeout(init,200);return;}'
-        . 'var m=L.map("osm-photo-map").setView([' . $lat . ',' . $lon . '],14);'
-        . 'L.tileLayer("' . addslashes(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png')) . '",'
-        . '{attribution:"&copy; OpenStreetMap &copy; CARTO",maxZoom:19}).addTo(m);'
+        . 'var L=window.L;if(!L){return;}'
+        . 'var m=L.map("osm-photo-map",{fadeAnimation:false,zoomAnimation:false,markerZoomAnimation:false}).setView([' . $lat . ',' . $lon . '],14);'
+        // Même liste de fonds que la galerie (menu « Fond »)
+        . 'if(window.OSMBasemaps){OSMBasemaps.attach(m,{key:' . json_encode($photo_tile) . ',select:document.getElementById("osm-photo-basemap"),button:document.getElementById("osm-photo-3d"),root:' . json_encode(get_root_url()) . ',pid:' . (int)$picture['current']['id'] . ',storageKey:"osmme_basemap_photo"});}'
+        . 'else{var b3=document.getElementById("osm-photo-3d");if(b3){b3.style.display="none";}var tl=L.tileLayer("' . addslashes(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png')) . '",'
+        . '{attribution:"&copy; OpenStreetMap &copy; CARTO",maxZoom:19}).addTo(m);}'
+        // Carte blanche : recalcul de taille
+        . '[150,500,1200,3000].forEach(function(t){setTimeout(function(){m.invalidateSize();},t);});'
+        . 'if(window.ResizeObserver){new ResizeObserver(function(){m.invalidateSize();}).observe(document.getElementById("osm-photo-map"));}'
         . 'L.marker([' . $lat . ',' . $lon . ']).addTo(m)'
         . '.bindPopup("<strong>' . $title . '</strong>").openPopup();'
-        . '}init();})();</script>';
+        . '}(window.osmmeLeaflet||function(n,c){c();})(false,init);})();</script>';
 
     $template->append('footer_elements', $html);
 }
@@ -438,11 +480,16 @@ function osmme_loc_end_element_set_unit() {
         'osm_standard'   => array('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap contributors', 19),
         'esri_satellite' => array('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Tiles &copy; Esri', 18),
         'opentopo'       => array('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap &copy; OpenTopoMap', 17),
+        'osm_france'     => array('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', '&copy; OpenStreetMap France | &copy; OpenStreetMap contributors', 20),
     );
     $t = isset($tiles_map[$tile_key]) ? $tiles_map[$tile_key] : $tiles_map['carto_voyager'];
 
     // Injecter l'URL tile via head_elements (avant le template) pour éviter Smarty avec {s}{z}
-    $tile_js = '<script>window.OSM_BATCH_TILE_URL="' . addslashes($t[0]) . '";'
+    $tile_js = '<script src="' . get_root_url() . 'plugins/osm_map/js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>'
+             . '<script>window.OSM_BATCH_TILE_KEY=' . json_encode($tile_key) . ';'
+             . 'window.OSM_BATCH_ROOT=' . json_encode(get_root_url()) . ';'
+             . 'window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';'
+             . 'window.OSM_BATCH_TILE_URL="' . addslashes($t[0]) . '";'
              . 'window.OSM_BATCH_TILE_ATTR="' . addslashes($t[1]) . '";'
              . 'window.OSM_BATCH_TILE_MAXZOOM=' . (int)$t[2] . ';</script>';
     $template->append('head_elements', $tile_js);
@@ -465,8 +512,10 @@ function osmme_inject_leaflet_admin() {
 
     global $template;
     $template->append('head_elements',
+        '<script>window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';</script>' .
+        '<style>.leaflet-container .leaflet-tile{opacity:1!important;visibility:visible!important;max-width:none!important;max-height:none!important;}.leaflet-tile-pane{opacity:1!important;visibility:visible!important;}</style>' .
         '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />' . "\n" .
-        '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>'
+        '<script>' . osmme_loader_js() . '</script>'
     );
 }
 

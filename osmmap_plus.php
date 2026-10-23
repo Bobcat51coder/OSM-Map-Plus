@@ -1,20 +1,20 @@
 <?php
 // OSM Map Plus — Page carte mondiale autonome
 /*
- * This file is part of [OSM-Map-Plus].
+ * This file is part of OSM Map Plus.
  *
- * [Nom de ton plugin] is free software: you can redistribute it and/or modify
+ * OSM Map Plus is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * [Nom de ton plugin] is distributed in the hope that it will be useful,
+ * OSM Map Plus is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with [Nom de ton plugin].  If not, see <https://www.gnu.org/licenses/>.
+ * along with OSM Map Plus.  If not, see <https://www.gnu.org/licenses/>.
  */
 if (!defined('PHPWG_ROOT_PATH'))
     define('PHPWG_ROOT_PATH', '../../');
@@ -103,7 +103,7 @@ $template->assign(array(
     'OSM_MAP_HEIGHT'  => isset($conf['osm_map_plus_height']) ? (int)$conf['osm_map_plus_height'] : 600,
     'OSM_ALBUMS'      => $albums,
     'TILES_JSON'      => json_encode($tiles),
-    'OSM_MAP_VERSION' => OSM_MAP_VERSION,
+    'OSM_MAP_VERSION' => OSM_MAP_ASSET_V,
     'OSM_TILE'        => isset($conf['osm_map_tile']) ? $conf['osm_map_tile'] : 'carto_voyager',
     'OSM_INIT_ZOOM'   => isset($conf['osm_map_zoom'])  ? (int)$conf['osm_map_zoom']  : 5,
 ));

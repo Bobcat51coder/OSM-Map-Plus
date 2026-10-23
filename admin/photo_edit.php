@@ -1,19 +1,19 @@
 <?php
 /*
- * This file is part of [OSM-Map-Plus].
+ * This file is part of OSM Map Plus.
  *
- * [Nom de ton plugin] is free software: you can redistribute it and/or modify
+ * OSM Map Plus is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * [Nom de ton plugin] is distributed in the hope that it will be useful,
+ * OSM Map Plus is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with [Nom de ton plugin].  If not, see <https://www.gnu.org/licenses/>.
+ * along with OSM Map Plus.  If not, see <https://www.gnu.org/licenses/>.
  */
 // OSM Map Enhanced — Édition photo individuelle
 // Bobcat-Fr / Claude (Anthropic)
@@ -89,8 +89,9 @@ $plg  = $root . 'plugins/osm_map/';
 global $template;
 $template->append('head_elements',
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />' . "\n" .
-    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>' . "\n" .
-    '<script>window.OSM_L = window.L;</script>'
+    '<script>window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';</script>' .
+    '<script src="' . get_root_url() . 'plugins/osm_map/js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>' .
+    '<script>' . osmme_loader_js() . '</script>'
 );
 
 // ── HTML ──────────────────────────────────────────────────────────────────
@@ -101,16 +102,20 @@ $init_lon_js = $lon !== '' ? $lon : 2.5;
 $init_zoom   = $lat !== '' ? 13 : 5;
 
 global $conf;
-// Relire depuis la DB pour avoir la valeur la plus récente
-$res_tile = pwg_query("SELECT value FROM " . CONFIG_TABLE . " WHERE param = 'osm_map_tile_geotag'");
-$row_tile = pwg_db_fetch_assoc($res_tile);
-$tile_geotag = $row_tile ? $row_tile['value'] : (isset($conf['osm_map_tile_geotag']) ? $conf['osm_map_tile_geotag'] : 'carto_voyager');
+// Réglages de l'onglet d'édition (relus en base pour avoir la valeur la plus récente)
+$res_tile = pwg_query("SELECT param, value FROM " . CONFIG_TABLE . " WHERE param IN ('osm_map_tile_edit', 'osm_map_edit_height')");
+$cfg_edit = array();
+while ($r_cfg = pwg_db_fetch_assoc($res_tile)) { $cfg_edit[$r_cfg['param']] = $r_cfg['value']; }
+$tile_geotag = isset($cfg_edit['osm_map_tile_edit']) ? $cfg_edit['osm_map_tile_edit'] : (isset($conf['osm_map_tile_edit']) ? $conf['osm_map_tile_edit'] : 'carto_voyager');
+$edit_height = isset($cfg_edit['osm_map_edit_height']) ? (int)$cfg_edit['osm_map_edit_height'] : (isset($conf['osm_map_edit_height']) ? (int)$conf['osm_map_edit_height'] : 400);
+$edit_height = max(200, min(1000, $edit_height));
 
 $tiles = array(
     'carto_voyager' => array(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), '&copy; OpenStreetMap &copy; CARTO', 19),
     'osm_standard'  => array('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap contributors', 19),
     'esri_satellite'=> array('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Tiles &copy; Esri', 18),
     'opentopo'      => array('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap &copy; OpenTopoMap', 17),
+    'osm_france'    => array('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', '&copy; OpenStreetMap France | &copy; OpenStreetMap contributors', 20),
 );
 $t = isset($tiles[$tile_geotag]) ? $tiles[$tile_geotag] : $tiles['carto_voyager'];
 
@@ -124,7 +129,8 @@ $html = '
 #osm-geocoder-results { background:#fff; border:1px solid #ccc; border-radius:4px; margin-top:2px; position:absolute; z-index:9999; width:400px; box-shadow:0 2px 8px rgba(0,0,0,.15); }
 #osm-geocoder-results div { padding:8px 12px; cursor:pointer; font-size:0.88rem; border-bottom:1px solid #f0f0f0; }
 #osm-geocoder-results div:hover { background:#f0f4ff; }
-#osm-edit-map { height:400px; border:1px solid #d0d0d0; border-radius:4px; margin-bottom:12px; position:relative; }
+.leaflet-container .leaflet-tile{opacity:1!important;visibility:visible!important;max-width:none!important;max-height:none!important;}.leaflet-tile-pane{opacity:1!important;visibility:visible!important;}
+#osm-edit-map { height:' . $edit_height . 'px; border:1px solid #d0d0d0; border-radius:4px; margin:0 30px 12px !important; width:auto !important; position:relative; }
 .osm-coords-row { display:flex; gap:20px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
 .osm-coords-row label { display:flex; align-items:center; gap:8px; font-size:0.9rem; }
 .osm-coords-row input { width:140px; padding:5px 8px; border:1px solid #ccc; border-radius:4px; font-family:monospace; }
@@ -146,6 +152,8 @@ $html .= '
   <div id="osm-geocoder-wrap" style="position:relative;">
     <input type="text" id="osm-geocoder-input" placeholder="Rechercher un lieu et appuyer sur Entrée ou cliquer 🔍" autocomplete="off">
     <button type="button" id="osm-geocoder-btn">&#128269;</button>
+    <select id="osm-basemap-edit" title="Fond de carte" style="padding:5px 8px;border:1px solid #ccc;border-radius:4px;"></select>
+    <button type="button" id="osm-edit-3d" title="Ouvrir la carte en relief 3D dans un nouvel onglet" style="padding:7px 12px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#127956;&#65039; 3D</button>
     <div id="osm-geocoder-results" style="display:none;"></div>
   </div>
 
@@ -170,6 +178,9 @@ $html .= '
 var OSM_EDIT_LAT  = ' . $init_lat . ';
 var OSM_EDIT_LON  = ' . $init_lon . ';
 var OSM_EDIT_ZOOM = ' . $init_zoom . ';
+var OSM_EDIT_ROOT = ' . json_encode($root) . ';
+var OSM_EDIT_ID = ' . (int)$image_id . ';
+var OSM_EDIT_TILE_KEY = ' . json_encode($tile_geotag) . ';
 var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $t[2] . '};
 </script>
 <script>
@@ -177,7 +188,7 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
   var map, marker;
 
   function initMap() {
-    var _L = window.OSM_L || window.L;
+    var _L = window.L;
     if (!_L) { setTimeout(initMap, 200); return; }
     // Fixer le chemin des icones Leaflet
     delete _L.Icon.Default.prototype._getIconUrl;
@@ -187,8 +198,19 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
       shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"
     });
     var center = (OSM_EDIT_LAT && OSM_EDIT_LON) ? [OSM_EDIT_LAT, OSM_EDIT_LON] : [46.5, 2.5];
-    map = _L.map("osm-edit-map", {center: center, zoom: OSM_EDIT_ZOOM});
-    _L.tileLayer(OSM_EDIT_TILE.url, {attribution: OSM_EDIT_TILE.attr, maxZoom: OSM_EDIT_TILE.maxZoom}).addTo(map);
+    // Marges latérales de 30 px (passage du curseur sans toucher la carte) — imposées aussi en JS, au cas où le thème écrase le CSS
+    var mapEl = document.getElementById("osm-edit-map");
+    mapEl.style.setProperty("margin", "0 30px 12px", "important");
+    mapEl.style.setProperty("width", "auto", "important");
+    mapEl.style.setProperty("box-sizing", "border-box", "important");
+    map = _L.map("osm-edit-map", {center: center, zoom: OSM_EDIT_ZOOM, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false});
+    if (window.OSMBasemaps) {
+      OSMBasemaps.attach(map, {key: OSM_EDIT_TILE_KEY, select: document.getElementById("osm-basemap-edit"), button: document.getElementById("osm-edit-3d"), root: OSM_EDIT_ROOT, pid: OSM_EDIT_ID, storageKey: "osmme_basemap_edit"});
+    } else {
+      _L.tileLayer(OSM_EDIT_TILE.url, {attribution: OSM_EDIT_TILE.attr, maxZoom: OSM_EDIT_TILE.maxZoom}).addTo(map);
+    }
+    [150, 500, 1200, 3000].forEach(function(t) { setTimeout(function() { map.invalidateSize(); }, t); });
+    if (window.ResizeObserver) { new ResizeObserver(function() { map.invalidateSize(); }).observe(document.getElementById("osm-edit-map")); }
 
     if (OSM_EDIT_LAT && OSM_EDIT_LON) {
       marker = _L.marker([OSM_EDIT_LAT, OSM_EDIT_LON], {draggable: true}).addTo(map);
@@ -197,7 +219,7 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
 
     map.on("click", function(e) {
       if (marker) { marker.setLatLng(e.latlng); }
-      else { marker = L.marker(e.latlng, {draggable: true}).addTo(map); bindMarker(); }
+      else { marker = _L.marker(e.latlng, {draggable: true}).addTo(map); bindMarker(); }
       setCoords(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
     });
   }
@@ -237,7 +259,7 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
           var lat = parseFloat(item.lat), lon = parseFloat(item.lon);
           map.setView([lat, lon], 13);
           if (marker) { marker.setLatLng([lat, lon]); }
-          else { marker = L.marker([lat, lon], {draggable: true}).addTo(map); bindMarker(); }
+          else { marker = window.L.marker([lat, lon], {draggable: true}).addTo(map); bindMarker(); }
           setCoords(lat.toFixed(6), lon.toFixed(6));
           geocResults.style.display = "none";
           geocInput.value = item.display_name.split(",")[0];
@@ -268,7 +290,7 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
   });
 
   // Attendre que tous les scripts soient chargés avant init
-  window.addEventListener("load", function() {
+  (window.osmmeLeaflet || function(n, c) { c(); })(false, function() {
     setTimeout(initMap, 100);
   });
 })();

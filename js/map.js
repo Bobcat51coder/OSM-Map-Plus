@@ -5,6 +5,7 @@
 
 var OSMMap = (function () {
 
+
   var map, clusterGroup;
   var allPhotos     = [];
   var visiblePhotos = [];
@@ -38,15 +39,56 @@ var OSMMap = (function () {
       url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
       attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://opentopomap.org/">OpenTopoMap</a>',
       maxZoom: 17
+    },
+    osm_france: {
+      url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+      attr: '&copy; <a href="https://www.openstreetmap.fr/">OpenStreetMap France</a> | &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 20
+    },
+    // Fonds vectoriels (MapLibre GL, chargé à la demande)
+    openfreemap: {
+      vector: true,
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      attr: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+    },
+    sat_labels: {
+      vector: true,
+      style: null,   // construit par _satLabelsStyle()
+      attr: 'Imagery &copy; Esri, Maxar, Earthstar Geographics &mdash; Noms : <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
     }
   };
 
+  // Libellés du sélecteur de fond de carte (ordre d'affichage)
+  var BASEMAP_CHOICES = [
+    ['carto_voyager', 'Carto Voyager'],
+    ['osm_standard',  'OpenStreetMap'],
+    ['osm_france',    'OpenStreetMap France'],
+    ['openfreemap',   'OpenFreeMap'],
+    ['esri_satellite','Satellite (Esri)'],
+    ['sat_labels',    'Satellite + noms'],
+    ['opentopo',      'Topographique']
+  ];
+  var MAPLIBRE_JS  = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+  var MAPLIBRE_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+  var MLLEAFLET_JS = 'https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js';
+  var baseLayer = null, baseKey = null, baseToken = 0, defaultBaseKey = 'carto_voyager';
+
+  // Attend que Leaflet (+ MarkerCluster) soit disponible : réutilise celui d'un autre plugin s'il est déjà là
   function init(options) {
+    (window.osmmeLeaflet || function (n, cb) { cb(); })(true, function () { _init(options); });
+  }
+
+  function _init(options) {
     apiUrl   = options.apiUrl || window.OSM_API_URL || 'ws.php';
     var initZoom = options.initZoom || 5;
 
     // Initialiser la carte immédiatement (vue monde) sans attendre les données
-    _initMap(options.mapHeight || 500, initZoom, options.tile || 'carto_voyager', null);
+    try {
+      _initMap(options.mapHeight || 500, initZoom, options.tile || 'carto_voyager', null);
+    } catch (e) {
+      console.error('OSM Map: initialisation de la carte', e);
+    }
+    if (!map) return;
     _bindControls();
 
     // Charger les points GPS via l'endpoint léger (lat/lng/id uniquement)
@@ -169,9 +211,22 @@ var OSMMap = (function () {
       mapOptions = { center: [46.5, 2.5], zoom: initZoom };
     }
 
+    // maxZoom explicite : un fond vectoriel (chargé en différé) n'a pas encore de couche à cet instant,
+    // et Leaflet.markercluster / fitBounds exigent un zoom maximum connu (sinon l'init plante)
+    mapOptions.maxZoom = 19;
     map = L.map('osm-map', mapOptions);
-    var t = TILES[tileKey] || TILES['carto_voyager'];
-    L.tileLayer(t.url, { attribution: t.attr, maxZoom: t.maxZoom }).addTo(map);
+    // La molette ne zoome la carte qu'après un clic dans la carte (sinon elle défile la page)
+    map.scrollWheelZoom.disable();
+    map.on('click focus', function () { map.scrollWheelZoom.enable(); });
+    map.on('mouseout', function () { map.scrollWheelZoom.disable(); });
+    var startKey = TILES[tileKey] ? tileKey : 'carto_voyager';
+    defaultBaseKey = startKey;
+    try {
+      var saved = JSON.parse(window.localStorage.getItem('osmme_basemap') || 'null');
+      if (saved && saved.d === startKey && TILES[saved.k]) startKey = saved.k;   // valable tant que le défaut admin n'a pas changé
+    } catch (e) {}
+    _setBasemap(startKey);
+    _buildBasemapControl(startKey);
 
     // Ajuster la vue sur les données réelles dès le départ
     if (initialBounds) {
@@ -183,7 +238,11 @@ var OSMMap = (function () {
       }
     }
 
-    clusterGroup = L.markerClusterGroup({
+    if (!L.markerClusterGroup) {
+      console.warn('OSM Map: Leaflet.markercluster indisponible, affichage sans regroupement');
+      clusterGroup = L.featureGroup();
+      clusterGroup.addLayers = function (arr) { var g = this; arr.forEach(function (m) { g.addLayer(m); }); };
+    } else clusterGroup = L.markerClusterGroup({
       chunkedLoading: true,
       chunkSize: 500,           // chunks plus grands = moins de passes RAF
       chunkDelay: 10,           // délai minimal entre chunks
@@ -197,6 +256,165 @@ var OSMMap = (function () {
 
     // moveend est activé après le chargement des données (voir init)
     window.addEventListener('resize', function () { map.invalidateSize(); });
+    // Taille réelle du conteneur : recalcul si elle change après l'init (thème, chargement tardif…)
+    if (window.ResizeObserver) { new ResizeObserver(function () { map.invalidateSize(); }).observe(container); }
+    [200, 800, 2000].forEach(function (t) { setTimeout(function () { map.invalidateSize(); }, t); });
+    // Le fond vectoriel (MapLibre) est repositionné à chaque déplacement / redimensionnement
+    function syncBase() { if (baseLayer && baseLayer._update && baseKey && TILES[baseKey] && TILES[baseKey].vector) { try { baseLayer._update(); } catch (e) {} } }
+    map.on('moveend zoomend resize', syncBase);
+  }
+
+  // ── Gestion des fonds de carte ────────────────────────────────────────────
+  function _loadScript(src, cb, errCb) {
+    var el = document.createElement('script');
+    el.src = src; el.async = true;
+    el.onload = cb; el.onerror = errCb;
+    document.head.appendChild(el);
+  }
+  function _loadCss(href) {
+    if (document.querySelector('link[href="' + href + '"]')) return;
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = href;
+    document.head.appendChild(l);
+  }
+  // Charge MapLibre GL + le plugin Leaflet une seule fois
+  function _withMapLibre(ok, fail) {
+    if (window.maplibregl && L.maplibreGL) { ok(); return; }
+    _loadCss(MAPLIBRE_CSS);
+    function step2() {
+      if (L.maplibreGL) { ok(); return; }
+      _loadScript(MLLEAFLET_JS, ok, fail);
+    }
+    if (window.maplibregl) { step2(); return; }
+    _loadScript(MAPLIBRE_JS, step2, fail);
+  }
+
+  // Style « satellite + noms » : imagerie Esri + noms de lieux/routes OpenFreeMap (en français si dispo)
+  function _satLabelsStyle() {
+    var name = ['coalesce', ['get', 'name:fr'], ['get', 'name']];
+    var font = ['Noto Sans Regular'];
+    var fontB = ['Noto Sans Bold'];
+    var halo = { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.75)', 'text-halo-width': 1.5 };
+    function place(id, classes, minzoom, size, bold) {
+      return {
+        id: id, type: 'symbol', source: 'ofm', 'source-layer': 'place', minzoom: minzoom,
+        filter: ['match', ['get', 'class'], classes, true, false],
+        layout: { 'text-field': name, 'text-font': bold ? fontB : font, 'text-size': size, 'text-max-width': 8 },
+        paint: halo
+      };
+    }
+    return {
+      version: 8,
+      glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+      sources: {
+        esri: { type: 'raster', tileSize: 256, maxzoom: 19,
+                tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] },
+        ofm:  { type: 'vector', url: 'https://tiles.openfreemap.org/planet' }
+      },
+      layers: [
+        { id: 'esri', type: 'raster', source: 'esri' },
+        place('pl-country', ['country'], 1, ['interpolate', ['linear'], ['zoom'], 1, 11, 6, 16], true),
+        place('pl-state',   ['state', 'province'], 4, 13, false),
+        place('pl-city',    ['city', 'town'], 5, ['interpolate', ['linear'], ['zoom'], 5, 12, 12, 19], true),
+        place('pl-village', ['village', 'suburb', 'quarter', 'neighbourhood'], 10, ['interpolate', ['linear'], ['zoom'], 10, 11, 15, 15], false),
+        place('pl-hamlet',  ['hamlet', 'isolated_dwelling'], 12, 11, false),
+        { id: 'roads', type: 'symbol', source: 'ofm', 'source-layer': 'transportation_name', minzoom: 12,
+          layout: { 'text-field': name, 'text-font': font, 'text-size': 11, 'symbol-placement': 'line' }, paint: halo },
+        { id: 'water', type: 'symbol', source: 'ofm', 'source-layer': 'water_name', minzoom: 3,
+          layout: { 'text-field': name, 'text-font': font, 'text-size': 12 },
+          paint: { 'text-color': '#cfe8ff', 'text-halo-color': 'rgba(0,0,0,0.75)', 'text-halo-width': 1.5 } }
+      ]
+    };
+  }
+
+  function _setBasemap(key) {
+    if (!map) return;
+    var t = TILES[key] || TILES['carto_voyager'];
+    if (!TILES[key]) key = 'carto_voyager';
+    var token = ++baseToken;
+
+    function apply(layer) {
+      if (token !== baseToken) return;          // un choix plus récent a pris le relais
+      if (baseLayer) { try { map.removeLayer(baseLayer); } catch (e) {} }
+      baseLayer = layer;
+      baseKey = key;
+      layer.addTo(map);
+      if (layer.bringToBack) layer.bringToBack();
+      var sel = document.getElementById('osm-basemap');
+      if (sel) sel.value = key;
+      try { window.localStorage.setItem('osmme_basemap', JSON.stringify({ d: defaultBaseKey, k: key })); } catch (e) {}
+    }
+
+    if (!t.vector) {
+      apply(L.tileLayer(t.url, { attribution: t.attr, maxZoom: t.maxZoom }));
+      return;
+    }
+    // Fonds vectoriels : nécessitent WebGL ; sinon retour au fond précédent
+    var fail = function () {
+      if (token !== baseToken) return;
+      _showToast('Ce fond de carte n\u2019a pas pu \u00eatre charg\u00e9 (WebGL requis).', 'info');
+      var sel = document.getElementById('osm-basemap');
+      if (sel && baseKey) sel.value = baseKey;
+    };
+    _withMapLibre(function () {
+      if (token !== baseToken) return;
+      try {
+        apply(L.maplibreGL({
+          style: key === 'sat_labels' ? _satLabelsStyle() : t.style,
+          attribution: t.attr
+        }));
+      } catch (e) { console.error('OSM Map: fond vectoriel', e); fail(); }
+    }, fail);
+  }
+
+  function _buildBasemapControl(currentKey) {
+    if (document.getElementById('osm-basemap')) return;
+    var anchor = document.getElementById('osm-btn-fit') || document.getElementById('osm-btn-panel');
+    if (!anchor || !anchor.parentNode) return;
+
+    var wrap = document.createElement('span');
+    wrap.className = 'osm-control-group osm-basemap-group';
+    var label = document.createElement('label');
+    label.setAttribute('for', 'osm-basemap');
+    label.textContent = 'Fond';
+    var sel = document.createElement('select');
+    sel.id = 'osm-basemap';
+    BASEMAP_CHOICES.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = c[0]; o.textContent = c[1];
+      sel.appendChild(o);
+    });
+    sel.value = currentKey;
+    sel.addEventListener('change', function () { _setBasemap(this.value); });
+
+    var btn3d = document.createElement('button');
+    btn3d.id = 'osm-btn-3d';
+    btn3d.type = 'button';
+    btn3d.title = 'Ouvrir la carte en relief 3D dans un nouvel onglet';
+    btn3d.innerHTML = '&#127956;&#65039; 3D';
+    btn3d.addEventListener('click', _open3D);
+
+    wrap.appendChild(label); wrap.appendChild(sel); wrap.appendChild(btn3d);
+    anchor.parentNode.insertBefore(wrap, anchor);
+  }
+
+  // Ouvre la vue 3D sur la zone courante, avec le filtre album en cours
+  function _open3D() {
+    if (!map) return;
+    var c = map.getCenter();
+    var url = (window.OSM_ROOT || '') + 'plugins/osm_map/osmme-3d.php'
+            + '?lat=' + c.lat.toFixed(5) + '&lng=' + c.lng.toFixed(5)
+            + '&z=' + map.getZoom()
+            + '&base=' + (baseKey === 'sat_labels' || baseKey === 'esri_satellite' ? 'sat' : (baseKey === 'osm_france' ? 'osmfr' : 'ofm'));
+    var sel = document.getElementById('osm-album-filter');
+    var cat = sel ? parseInt(sel.value, 10) : 0;
+    if (!cat) {
+      // Page d'album : le filtre est dans OSM_POINTS_URL (?cat_id=)
+      var m = /[?&]cat_id=(\d+)/.exec(window.OSM_POINTS_URL || '');
+      if (m) cat = parseInt(m[1], 10);
+    }
+    if (cat) url += '&cat_id=' + cat;
+    window.open(url, '_blank', 'noopener');
   }
 
   // Token pour annuler un rendu en cours si un nouveau démarre (filtre album)

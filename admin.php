@@ -1,7 +1,7 @@
 <?php
 // +-----------------------------------------------------------------------+
 // | This file is part of Piwigo.                                          |
-// | This file is part of [OSM-Map-Plus].                                                                     |
+// | This file is part of OSM Map Plus.                                                                     |
 // | For copyright and license information, please view the COPYING.txt    |
 // | file that was distributed with this source code.                      |
 // +-----------------------------------------------------------------------+
@@ -21,6 +21,12 @@ $tile_options = array(
     'osm_standard'   => 'OpenStreetMap Standard',
     'esri_satellite' => 'Satellite (Esri)',
     'opentopo'       => 'Topographique (OpenTopo)',
+    'osm_france'     => 'OpenStreetMap France',
+);
+// Fonds proposés pour la galerie : + fonds vectoriels (WebGL), le visiteur peut en changer sur la carte
+$tile_options_gallery = $tile_options + array(
+    'openfreemap'    => 'OpenFreeMap',
+    'sat_labels'     => 'Satellite + noms (OpenFreeMap)',
 );
 
 if (isset($_POST['submit_osm'])) {
@@ -31,8 +37,8 @@ if (isset($_POST['submit_osm'])) {
         conf_update_param('osm_map_plus_height', max(300, min(2000, (int)$_POST['osm_map_plus_height'])));
     }
     $zoom       = max(1,   min(18,   (int)$_POST['osm_map_zoom']));
-    $tile       = isset($tile_options[$_POST['osm_map_tile']])        ? $_POST['osm_map_tile']        : 'carto_voyager';
-    $tile_geotag= isset($tile_options[$_POST['osm_map_tile_geotag']]) ? $_POST['osm_map_tile_geotag'] : 'carto_voyager';
+    $tile       = isset($tile_options_gallery[$_POST['osm_map_tile']]) ? $_POST['osm_map_tile']        : 'carto_voyager';
+    $tile_geotag= isset($tile_options_gallery[$_POST['osm_map_tile_geotag']]) ? $_POST['osm_map_tile_geotag'] : 'carto_voyager';
 
     conf_update_param('osm_map_public',     $public);
     conf_update_param('osm_map_height',     $height);
@@ -40,6 +46,13 @@ if (isset($_POST['submit_osm'])) {
     conf_update_param('osm_map_zoom',       $zoom);
     conf_update_param('osm_map_tile',       $tile);
     conf_update_param('osm_map_tile_geotag',$tile_geotag);
+    $tile_edit = isset($tile_options_gallery[$_POST['osm_map_tile_edit'] ?? '']) ? $_POST['osm_map_tile_edit'] : 'carto_voyager';
+    conf_update_param('osm_map_tile_edit',  $tile_edit);
+    conf_update_param('osm_map_edit_height', max(200, min(1000, (int)($_POST['osm_map_edit_height'] ?? 400))));
+    $tile_photo = isset($tile_options_gallery[$_POST['osm_map_tile_photo'] ?? '']) ? $_POST['osm_map_tile_photo'] : 'carto_voyager';
+    conf_update_param('osm_map_tile_photo', $tile_photo);
+    conf_update_param('osm_map_photo_height', max(150, min(800, (int)($_POST['osm_map_photo_height'] ?? 220))));
+    conf_update_param('osm_map_unit_height', max(150, min(800,  (int)($_POST['osm_map_unit_height'] ?? 280))));
     conf_update_param('osm_map_hide_if_osm', !empty($_POST['osm_map_hide_if_osm']) ? '1' : '0');
     conf_update_param('osm_map_carto_api_key', trim($_POST['osm_map_carto_api_key'] ?? ''));
 
@@ -54,6 +67,11 @@ $osm_plus_height = isset($conf['osm_map_plus_height']) ? (int)$conf['osm_map_plu
 $osm_zoom        = isset($conf['osm_map_zoom'])        ? (int)$conf['osm_map_zoom']        : 5;
 $osm_tile        = isset($conf['osm_map_tile'])        ? $conf['osm_map_tile']             : 'carto_voyager';
 $osm_tile_geotag  = isset($conf['osm_map_tile_geotag']) ? $conf['osm_map_tile_geotag']      : 'carto_voyager';
+$osm_tile_photo   = isset($conf['osm_map_tile_photo'])   ? $conf['osm_map_tile_photo']       : 'carto_voyager';
+$osm_photo_height = isset($conf['osm_map_photo_height']) ? (int)$conf['osm_map_photo_height'] : 220;
+$osm_tile_edit    = isset($conf['osm_map_tile_edit'])    ? $conf['osm_map_tile_edit']        : 'carto_voyager';
+$osm_edit_height  = isset($conf['osm_map_edit_height'])  ? (int)$conf['osm_map_edit_height'] : 400;
+$osm_unit_height  = isset($conf['osm_map_unit_height'])  ? (int)$conf['osm_map_unit_height'] : 280;
 $osm_hide_if_osm  = isset($conf['osm_map_hide_if_osm'])  && $conf['osm_map_hide_if_osm'] == '1';
 $osm_carto_api_key = isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '';
 
@@ -218,29 +236,89 @@ ob_start();
   <div class="osm-admin-row">
     <div class="osm-admin-label">
       <strong>Fond de carte — Galerie</strong>
-      <p class="description">Carte affichée sur la galerie publique.</p>
+      <p class="description">Fond par défaut de la carte affichée sur la galerie publique. Les visiteurs peuvent en changer via le menu « Fond » de la carte (leur choix est mémorisé dans leur navigateur).</p>
     </div>
     <div class="osm-admin-field">
       <select name="osm_map_tile">
-        <?php foreach ($tile_options as $k => $v): ?>
+        <?php foreach ($tile_options_gallery as $k => $v): ?>
         <option value="<?= $k ?>" <?= $k === $osm_tile ? 'selected' : '' ?>><?= $v ?></option>
         <?php endforeach ?>
       </select>
     </div>
   </div>
 
-  <!-- Fond de carte géotaggage -->
+  <!-- Mini-carte des pages photo -->
   <div class="osm-admin-row">
     <div class="osm-admin-label">
-      <strong>Fond de carte — Géotaggage</strong>
-      <p class="description">Carte utilisée dans l'édition photo et le mode unitaire batch.</p>
+      <strong>Fond de carte — Page d'une photo</strong>
+      <p class="description">Fond par défaut de la mini-carte « Localisation » affichée sous chaque photo géolocalisée. Même liste que la galerie ; les visiteurs peuvent le changer avec le menu « Fond ».</p>
+    </div>
+    <div class="osm-admin-field">
+      <select name="osm_map_tile_photo">
+        <?php foreach ($tile_options_gallery as $k => $v): ?>
+        <option value="<?= $k ?>" <?= $k === $osm_tile_photo ? 'selected' : '' ?>><?= $v ?></option>
+        <?php endforeach ?>
+      </select>
+    </div>
+  </div>
+
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Hauteur de la carte — Page d'une photo</strong>
+      <p class="description">En pixels. Min : 150, Max : 800.</p>
+    </div>
+    <div class="osm-admin-field">
+      <input type="number" name="osm_map_photo_height" value="<?= $osm_photo_height ?>" min="150" max="800" step="10"> px
+    </div>
+  </div>
+
+  <!-- Fond de carte géotaggage (gestion par lot) -->
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Fond de carte — Gestion par lot</strong>
+      <p class="description">Fond par défaut des cartes du mode unitaire de la gestion par lot. Même liste que la galerie ; un menu « Fond » permet aussi de le changer sur chaque carte.</p>
     </div>
     <div class="osm-admin-field">
       <select name="osm_map_tile_geotag">
-        <?php foreach ($tile_options as $k => $v): ?>
+        <?php foreach ($tile_options_gallery as $k => $v): ?>
         <option value="<?= $k ?>" <?= $k === $osm_tile_geotag ? 'selected' : '' ?>><?= $v ?></option>
         <?php endforeach ?>
       </select>
+    </div>
+  </div>
+
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Hauteur de la carte — Gestion par lot</strong>
+      <p class="description">En pixels, pour chaque photo du mode unitaire. Min : 150, Max : 800.</p>
+    </div>
+    <div class="osm-admin-field">
+      <input type="number" name="osm_map_unit_height" value="<?= $osm_unit_height ?>" min="150" max="800" step="10"> px
+    </div>
+  </div>
+
+  <!-- Page d'édition d'une photo -->
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Fond de carte — Édition d'une photo</strong>
+      <p class="description">Fond par défaut de l'onglet « OSM Map Plus » de la page d'édition d'une photo. Même liste que la galerie ; un menu « Fond » permet aussi de le changer sur la carte.</p>
+    </div>
+    <div class="osm-admin-field">
+      <select name="osm_map_tile_edit">
+        <?php foreach ($tile_options_gallery as $k => $v): ?>
+        <option value="<?= $k ?>" <?= $k === $osm_tile_edit ? 'selected' : '' ?>><?= $v ?></option>
+        <?php endforeach ?>
+      </select>
+    </div>
+  </div>
+
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Hauteur de la carte — Édition d'une photo</strong>
+      <p class="description">En pixels. Min : 200, Max : 1000.</p>
+    </div>
+    <div class="osm-admin-field">
+      <input type="number" name="osm_map_edit_height" value="<?= $osm_edit_height ?>" min="200" max="1000" step="10"> px
     </div>
   </div>
 

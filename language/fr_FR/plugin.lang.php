@@ -1,4 +1,5 @@
 <?php
+defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // Language: Français
 $lang['Map']                = 'Carte';
 $lang['Album']              = 'Album';

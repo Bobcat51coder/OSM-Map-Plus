@@ -14,8 +14,8 @@
   margin: 20px 0;
   border-top: 1px solid #ddd;
   border-bottom: 1px solid #ddd;
-  border-left: 12px solid #ddd;   /* bordure latérale : passage curseur sans activer la carte */
-  border-right: 12px solid #ddd;
+  border-left: 14px solid #ddd;   /* bordure latérale : passage curseur sans activer la carte */
+  border-right: 14px solid #ddd;
   border-radius: 8px;
   overflow: hidden;
   font-family: inherit;
@@ -140,7 +140,7 @@
   flex: 1;
   min-height: 300px;
   z-index: 1;
-  transition: all .3s ease;
+  transition: none;
   /* La carte prend tout l'espace MOINS les marges de osm-body */
   border-radius: 2px;
 }

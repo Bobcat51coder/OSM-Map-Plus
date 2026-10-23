@@ -1,1 +1,1 @@
-Carte OpenStreetMap pour Piwigo avec clustering, géocodeur, filtres par album, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
+Carte des photos géolocalisées pour Piwigo : clustering, plusieurs fonds de carte (OpenStreetMap, OpenStreetMap France, OpenFreeMap, satellite + noms, topographique), vue 3D en relief, géocodeur, filtres par album, panneau liste, création d'album depuis la carte et géotaggage depuis l'administration. Compatible tous thèmes.

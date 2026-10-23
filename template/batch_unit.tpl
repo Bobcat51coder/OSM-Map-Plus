@@ -18,6 +18,10 @@
       style="flex:1;min-width:150px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.88rem;">
     <button type="button" id="osmme-search-btn-{$element.ID}" title="Rechercher"
       style="padding:5px 10px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;">&#128269;</button>
+    <select id="osmme-basemap-{$element.ID}" title="Fond de carte"
+      style="padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;"></select>
+    <button type="button" id="osmme-3d-btn-{$element.ID}" title="Ouvrir la carte en relief 3D dans un nouvel onglet"
+      style="padding:5px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#127956;&#65039; 3D</button>
     <button type="button" id="osmme-copy-btn-{$element.ID}" title="Copier les coordonn&eacute;es"
       style="padding:5px 10px;background:#34a853;color:#fff;border:none;border-radius:4px;cursor:pointer;">&#128203; Copier</button>
     <button type="button" id="osmme-paste-btn-{$element.ID}" title="Coller les coordonn&eacute;es"
@@ -25,7 +29,7 @@
     <div id="osmme-results-{$element.ID}"
       style="display:none;position:absolute;top:34px;left:0;right:80px;background:#fff;border:1px solid #ccc;border-radius:4px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.15);max-height:180px;overflow-y:auto;"></div>
   </div>
-  <div id="osm-unit-map-{$element.ID}" style="height:{$OSM_UNIT_HEIGHT}px;width:100%;margin:5px 0;border:1px solid #ccc;border-radius:4px;"></div>
+  <div id="osm-unit-map-{$element.ID}" style="height:{$OSM_UNIT_HEIGHT}px;width:calc(100% - 60px);margin:5px 30px;border:1px solid #ccc;border-radius:4px;"></div>
   <p style="font-size:0.82em;color:#666;margin:4px 0 0;">
     &#128161; Cliquez sur la carte ou d&eacute;placez le marqueur pour modifier la position.
   </p>
@@ -59,8 +63,27 @@ var osmUnitData_{$element.ID} = {
     div.setAttribute('data-osm-init', '1');
     var center = (initLat && initLon) ? [initLat, initLon] : [46.5, 2.5];
     var zoom   = (initLat && initLon) ? 13 : 5;
-    map = _L.map(divId, {center: center, zoom: zoom});
-    _L.tileLayer(tileUrl, {attribution: tileAttr, maxZoom: tileZoom}).addTo(map);
+    map = _L.map(divId, {center: center, zoom: zoom, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false});
+    if (window.OSMBasemaps) {
+      // Même liste de fonds que la galerie. Les fonds vectoriels (WebGL) sont limités aux pages de peu de photos
+      // (les navigateurs plafonnent le nombre de contextes WebGL simultanés).
+      var nMaps = document.querySelectorAll('[id^="osm-unit-map-"]').length;
+      OSMBasemaps.attach(map, {
+        key: window.OSM_BATCH_TILE_KEY,
+        select: document.getElementById('osmme-basemap-{/literal}{$element.ID}{literal}'),
+        button: document.getElementById('osmme-3d-btn-{/literal}{$element.ID}{literal}'),
+        root: window.OSM_BATCH_ROOT,
+        pid: imageID,
+        allowVector: nMaps <= 8,
+        storageKey: 'osmme_basemap_geotag'
+      });
+      hardenMap(_L, map, null, div);
+    } else {
+      var b3x = document.getElementById('osmme-3d-btn-{/literal}{$element.ID}{literal}');
+      if (b3x) b3x.style.display = 'none';
+      var tl = _L.tileLayer(tileUrl, {attribution: tileAttr, maxZoom: tileZoom}).addTo(map);
+      hardenMap(_L, map, tl, div);
+    }
     if (initLat && initLon) {
       marker = _L.marker([initLat, initLon], {draggable: true})
         .bindPopup(initLat.toFixed(6) + ', ' + initLon.toFixed(6)).addTo(map);
@@ -73,6 +96,24 @@ var osmUnitData_{$element.ID} = {
       marker.bindPopup(lat + ', ' + lon).openPopup();
       setCoords(lat, lon);
     });
+  }
+
+  // Carte blanche / qui disparaît : recalcul de taille (conteneur masqué ou redimensionné par Piwigo)
+  // + bascule automatique sur OpenStreetMap si le fond choisi ne répond pas (clé Carto absente/invalide…)
+  function hardenMap(_L, m, layer, el) {
+    var errs = 0, swapped = false;
+    if (layer) layer.on('tileerror', function() {
+      if (swapped || ++errs < 4) return;
+      swapped = true;
+      m.removeLayer(layer);
+      _L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'}).addTo(m);
+    });
+    [150, 500, 1200, 3000].forEach(function(t) { setTimeout(function() { m.invalidateSize(); }, t); });
+    if (window.ResizeObserver) { new ResizeObserver(function() { m.invalidateSize(); }).observe(el); }
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function(en) { if (en[0].isIntersecting) m.invalidateSize(); }).observe(el);
+    }
   }
 
   function bindMarker(m) {
@@ -192,7 +233,7 @@ var osmUnitData_{$element.ID} = {
     });
   }
 
-  window.addEventListener('load', function() {
+  (window.osmmeLeaflet || function(n, c) { c(); })(false, function() {
     setTimeout(function() { initMap(); initSearch(); }, 100);
   });
 })();
