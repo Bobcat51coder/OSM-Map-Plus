@@ -160,7 +160,7 @@
 }
 
 .osm-panel.osm-panel-open {
-  width: 280px;
+  width: 340px;
   border-left-width: 1px;
 }
 
@@ -232,8 +232,8 @@ a.osm-pi-info:hover .osm-pi-name { text-decoration: underline; color: #1a73e8; }
 
 /* Miniature dans le panneau */
 .osm-pi-thumb {
-  width: 52px;
-  height: 52px;
+  width: 96px;
+  height: 72px;
   flex-shrink: 0;
   border-radius: 5px;
   overflow: hidden;
@@ -461,3 +461,22 @@ a.osm-pi-info:hover .osm-pi-name { text-decoration: underline; color: #1a73e8; }
 /* Clusters */
 .marker-cluster div { display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-size:13px; font-weight:bold; color:#333; }
 .marker-cluster span { line-height:1; }
+
+
+/* ── Mode « Vignettes » : groupes de photos affichés comme dans Apple Photos ── */
+.osm-thumb-wrap { background: transparent; border: 0; }
+.osm-thumb { position: relative; width: 100%; height: calc(100% - 9px); box-sizing: border-box;
+  border: 3px solid #fff; border-radius: 12px; background: #cfd8e3; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.osm-thumb::after { content: ''; position: absolute; left: 50%; bottom: -10px; margin-left: -7px;
+  border: 7px solid transparent; border-top-color: #fff; border-bottom: 0; }
+.osm-thumb-img { position: absolute; inset: 0; border-radius: 8px; background-size: cover; background-position: center; }
+.osm-thumb-n { position: absolute; left: 6px; bottom: 4px; color: #fff; font-weight: 700; font-size: 15px; line-height: 1;
+  text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.9); letter-spacing: .5px; }
+#osm-btn-thumbs.osm-btn-active { background: #dbe8ff; border-color: #1a73e8; }
+
+/* ── Bouton Diaporama du panneau liste ── */
+#osm-btn-slideshow { margin-left: auto; margin-right: 8px; padding: 4px 10px; border: 1px solid #1a73e8; border-radius: 5px;
+  background: #1a73e8; color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap; }
+#osm-btn-slideshow:hover { background: #1558b0; }
+#osm-slideshow-order { margin-left: auto; margin-right: 6px; padding: 3px 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 5px; background: #fff; max-width: 96px; }
+#osm-btn-slideshow { margin-left: 0 !important; }
