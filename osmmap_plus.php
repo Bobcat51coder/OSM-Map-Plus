@@ -83,6 +83,13 @@ while ($a = pwg_db_fetch_assoc($qa)) {
 
 $photos_script = '<script>'
     . 'window.OSM_ROOT="' . $root . '";'
+    . 'window.OSM_FAV_PLACES=' . (function() {
+          try {
+              if (!function_exists('is_admin') || !is_admin()) { return '[]'; }   // lieux favoris : administrateurs uniquement
+              include_once(dirname(__FILE__) . '/include/places.inc.php'); return json_encode(osmme_pl_list());
+          }
+          catch (Throwable $e) { return '[]'; }
+      })() . ';'
     . 'window.OSM_POINTS_URL="' . $root . 'plugins/osm_map/osmme-points.php";'
     . 'window.OSM_PHOTO_URL="' . $root . 'plugins/osm_map/osmme-photo.php";'
     . 'window.OSM_API_URL=\'' . $api_url . '\';'

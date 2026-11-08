@@ -1,0 +1,6 @@
+admin_geotag.php
+css/geotag.css
+js/geotag.js
+template/photo_map.tpl
+template/worldmap.tpl
+include/ws_functions.inc.php

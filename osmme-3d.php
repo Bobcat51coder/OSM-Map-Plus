@@ -225,7 +225,7 @@ header('Cache-Control: no-store, max-age=0');
 
   function addPhotoLayers() {
     if (map.getSource('photos')) return;
-    map.addSource('photos', { type: 'geojson', data: photoFC, cluster: true, clusterRadius: 50, clusterMaxZoom: 14 });
+    map.addSource('photos', { type: 'geojson', data: photoFC, cluster: true, clusterRadius: 50, clusterMaxZoom: 20 });
     map.addLayer({ id: 'ph-clusters', type: 'circle', source: 'photos', filter: ['has', 'point_count'],
       paint: {
         'circle-color': ['step', ['get', 'point_count'], '#51a2f0', 50, '#f1a33b', 500, '#e0564a'],
@@ -265,15 +265,50 @@ header('Cache-Control: no-store, max-age=0');
     .catch(function (e) { console.error('OSM Map 3D', e); msg('Impossible de charger les photos.'); document.getElementById('count').textContent = ''; });
 
   // ── Interactions ─────────────────────────────────────────────────────────
+  // Bulle listant plusieurs photos (photos superposées au même endroit, ou groupe qu'on ne peut plus séparer)
+  function showPhotos(ids, coords) {
+    ids = ids.filter(function (v, i, a) { return a.indexOf(v) === i; });
+    var popup = new maplibregl.Popup({ maxWidth: '320px' }).setLngLat(coords)
+      .setHTML('<div class="ph-pop" style="color:#888">Chargement…</div>').addTo(map);
+    var shown = ids.slice(0, 100);
+    fetch(CFG.photo + '?ids=' + shown.join(','), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        var h = '<div class="ph-pop"><div class="m" style="margin:0 0 6px"><strong>' + ids.length + ' photos</strong> à cet endroit</div>' +
+                '<div style="max-height:260px;overflow:auto">';
+        (list || []).forEach(function (d) {
+          h += '<a href="' + d.page_url + '" target="_blank" rel="noopener" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;text-decoration:none;color:inherit">' +
+               (d.thumbnail_url ? '<img src="' + d.thumbnail_url + '" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:4px;margin:0;flex-shrink:0" onerror="this.style.display=\'none\'">' : '') +
+               '<span><span class="t" style="display:block">' + (d.name || ('Photo #' + d.id)) + '</span>' +
+               (d.date ? '<span class="m">' + d.date + '</span>' : '') + '</span></a>';
+        });
+        popup.setHTML(h + '</div>' + (ids.length > shown.length ? '<div class="m">… et ' + (ids.length - shown.length) + ' autres</div>' : '') + '</div>');
+      })
+      .catch(function () { popup.setHTML('<div class="ph-pop">' + ids.length + ' photos</div>'); });
+  }
+
   map.on('click', 'ph-clusters', function (e) {
     var f = map.queryRenderedFeatures(e.point, { layers: ['ph-clusters'] })[0];
     if (!f) return;
-    map.getSource('photos').getClusterExpansionZoom(f.properties.cluster_id).then(function (z) {
-      map.easeTo({ center: f.geometry.coordinates, zoom: z + 0.5 });
+    var src = map.getSource('photos'), cid = f.properties.cluster_id, coords = f.geometry.coordinates.slice();
+    src.getClusterExpansionZoom(cid).then(function (z) {
+      // Groupe impossible à séparer en zoomant (photos au même endroit) : on liste ses photos
+      if (z > 20 || z <= map.getZoom() + 0.05) {
+        src.getClusterLeaves(cid, 100, 0).then(function (leaves) {
+          showPhotos(leaves.map(function (l) { return l.properties.id; }), coords);
+        });
+      } else {
+        map.easeTo({ center: coords, zoom: z + 0.5 });
+      }
     });
   });
   function onPointClick(e) {
     var f = e.features[0];
+    // Photos superposées (mêmes coordonnées) : toutes celles sous le clic
+    var box = [[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]];
+    var ids = map.queryRenderedFeatures(box, { layers: ['ph-point', 'ph-current'] }).map(function (x) { return x.properties.id; });
+    ids = ids.filter(function (v, i, a) { return a.indexOf(v) === i; });
+    if (ids.length > 1) { showPhotos(ids, f.geometry.coordinates.slice()); return; }
     var id = f.properties.id;
     var coords = f.geometry.coordinates.slice();
     var popup = new maplibregl.Popup({ maxWidth: '260px' }).setLngLat(coords)

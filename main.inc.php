@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.0.7
+Version: 1.0.8
 Description: Carte OpenStreetMap pour Piwigo : clustering, géocodeur, filtres par album, choix de fonds de carte (OpenFreeMap, satellite + noms, OSM France…), vue 3D, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1073
 Author: Bobcat-Fr
@@ -35,7 +35,7 @@ Has Settings: true
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // --- Définition du plugin ---
 define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
-define('OSM_MAP_VERSION', '1.0.7');
+define('OSM_MAP_VERSION', '1.0.8');
 // Paramètre anti-cache des fichiers JS/CSS (change à chaque mise à jour des fichiers)
 define('OSM_MAP_ASSET_V', OSM_MAP_VERSION . '.' . (int)@filemtime(__FILE__));
 
@@ -396,6 +396,7 @@ function osmme_inject_map_block() {
         . '</div>'
 
         . '<script>'
+        . 'window.OSM_FAV_PLACES=' . json_encode((function_exists('is_admin') && is_admin()) ? osmme_places_for_batch() : array()) . ';'
         . 'window.OSM_POINTS_URL="' . $root . 'plugins/osm_map/osmme-points.php' . ($cat_id > 0 ? '?cat_id=' . $cat_id : '') . '";'
         . 'window.OSM_PHOTO_URL="' . $root . 'plugins/osm_map/osmme-photo.php";'
         . 'window.OSM_ROOT="' . $root . '";'
@@ -459,6 +460,11 @@ function osmme_inject_on_photo_page() {
 // ============================================================================
 // GÉOTAGGAGE — Mode unitaire batch manager (hook natif Piwigo)
 // ============================================================================
+function osmme_places_for_batch() {
+    include_once(OSM_MAP_PATH . 'include/places.inc.php');
+    try { return osmme_pl_list(); } catch (Throwable $e) { return array(); }
+}
+
 function osmme_loc_end_element_set_unit() {
     global $template, $conf;
 
@@ -488,6 +494,7 @@ function osmme_loc_end_element_set_unit() {
     $tile_js = '<script src="' . get_root_url() . 'plugins/osm_map/js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>'
              . '<script>window.OSM_BATCH_TILE_KEY=' . json_encode($tile_key) . ';'
              . 'window.OSM_BATCH_ROOT=' . json_encode(get_root_url()) . ';'
+             . 'window.OSM_PLACES=' . json_encode(osmme_places_for_batch()) . ';'
              . 'window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';'
              . 'window.OSM_BATCH_TILE_URL="' . addslashes($t[0]) . '";'
              . 'window.OSM_BATCH_TILE_ATTR="' . addslashes($t[1]) . '";'

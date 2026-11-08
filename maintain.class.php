@@ -37,6 +37,13 @@ class osm_map_maintain extends PluginMaintain
                 $conf[$key] = $val;
             }
         }
+        // Table des écarts GPS/EXIF validés + rechargement de la sauvegarde de _data (réinstallation)
+        include_once(dirname(__FILE__) . '/include/exif_gps.inc.php');
+        osmme_ok_ensure();
+        osmme_ok_restore();
+        include_once(dirname(__FILE__) . '/include/places.inc.php');
+        osmme_pl_ensure();
+        osmme_pl_restore();
     }
 
     function update($old_version, $new_version, &$errors = array())
@@ -57,5 +64,13 @@ class osm_map_maintain extends PluginMaintain
     {
         // Supprime les réglages du plugin
         conf_delete_param(array_keys($this->default_conf));
+        // Écarts validés : sauvegarde dans _data/osm_map_validated.json (relue à la réinstallation), puis suppression de la table
+        include_once(dirname(__FILE__) . '/include/exif_gps.inc.php');
+        osmme_ok_backup();
+        pwg_query('DROP TABLE IF EXISTS `' . osmme_ok_table() . '`');
+        // Lieux favoris : même principe
+        include_once(dirname(__FILE__) . '/include/places.inc.php');
+        osmme_pl_backup();
+        pwg_query('DROP TABLE IF EXISTS `' . osmme_pl_table() . '`');
     }
 }

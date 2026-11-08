@@ -132,6 +132,9 @@ ob_start();
     </div>
     <?php endif ?>
   </div>
+  <p style="margin:0;padding:0 16px 16px;display:flex;gap:12px;flex-wrap:wrap;"><a class="submit" style="display:inline-block;padding:10px 20px;font-size:1.1rem;font-weight:600;text-decoration:none;" href="<?= get_root_url() ?>admin.php?page=plugin&amp;section=osm_map/admin/places.php">⭐ Lieux favoris</a>
+  <a class="submit" style="display:inline-block;padding:10px 20px;font-size:1.1rem;font-weight:600;text-decoration:none;" href="<?= get_root_url() ?>admin.php?page=plugin&amp;section=osm_map/admin/no_gps.php">📍 Photos sans GPS</a>
+  <a class="submit" style="display:inline-block;padding:10px 20px;font-size:1.1rem;font-weight:600;text-decoration:none;" href="<?= get_root_url() ?>admin.php?page=plugin&amp;section=osm_map/admin/exif_audit.php">🔎 Écarts GPS / EXIF — audit de la galerie</a></p>
 </div>
 
 <!-- Options -->

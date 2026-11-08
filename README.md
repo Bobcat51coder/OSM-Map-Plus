@@ -1,112 +1,139 @@
-# OSM Map Plus — Plugin Piwigo
+# OSM Map Plus — Piwigo plugin
 
-Affiche une carte interactive sur votre galerie Piwigo avec toutes les photos géolocalisées (GPS), propose plusieurs fonds de carte, une vue 3D en relief, et permet de géotagger les photos depuis l'administration.
+*[Version française](README.fr.md)*
 
-Licence : [GNU GPL-2.0](LICENSE) — Compatible tous thèmes.
+Shows an interactive map of all your geotagged (GPS) photos on your Piwigo gallery, with several basemaps, a 3D terrain view, and geotagging tools in the administration.
 
-## Fonctionnalités
+License: [GNU GPL-2.0](LICENSE) — works with all themes.
 
-**Carte de la galerie**
-- Clustering automatique des marqueurs, adapté aux grandes galeries (plusieurs dizaines de milliers de photos)
-- Menu **« Fond »** : Carto Voyager, OpenStreetMap, **OpenStreetMap France**, **OpenFreeMap**, Satellite (Esri), **Satellite + noms**, Topographique (le choix du visiteur est mémorisé dans son navigateur)
-- Bouton **« 3D »** : ouvre dans un nouvel onglet une vue en relief (inclinaison, exagération du relief réglable), avec les photos regroupées, le fond au choix et le filtre d'album en cours. Le bouton « 3D » est aussi présent sur la mini-carte des pages photo, sur la carte de l'onglet d'édition photo et sur les cartes de la gestion par lot (la photo concernée est mise en évidence)
-- Marges latérales autour de la carte et zoom à la molette activé seulement après un clic dans la carte : on peut faire défiler la page sans déplacer la carte
-- Panneau liste latéral synchronisé avec la zone visible
-- Filtrage par album, géocodeur (recherche de lieu)
-- Création d'un album Piwigo depuis les photos visibles sur la carte (réservé aux administrateurs ; les autres utilisateurs ne voient que les listes)
-- Page « OSM Map Plus » : carte plein écran de toutes les photos (utilisateurs connectés)
-- Mini-carte « Localisation » sur les pages photo (menu « Fond », fond et hauteur réglables)
-- Contrôle d'accès : carte réservée aux connectés ou ouverte au public (albums publics uniquement)
+## Features
 
-**Géotaggage (administration)**
-- Mode unitaire de la gestion par lot : carte, recherche de lieu, boutons Copier / Coller les coordonnées
-- Onglet « OSM Map Plus » sur la fiche d'édition d'une photo : carte, recherche, enregistrement ou effacement du GPS
-- Mêmes fonds de carte que la galerie (menu « Fond » sur chaque carte)
+**Gallery map**
+- Automatic marker clustering, suited to large galleries (tens of thousands of photos)
+- **"Basemap"** menu: Carto Voyager, OpenStreetMap, **OpenStreetMap France**, **OpenFreeMap**, Satellite (Esri), **Satellite + labels**, Topographic (the visitor's choice is remembered in their browser)
+- **"3D"** button: opens a terrain view in a new tab (tilt, adjustable relief exaggeration, optional **globe** mode) with grouped photos, the chosen basemap and the current album filter. The 3D button is also available on the mini-map of photo pages, on the map of the photo edit tab and on the batch manager maps (the photo concerned is highlighted)
+- Side margins around the map, and mouse-wheel zoom enabled only after a click in the map, so you can scroll the page without moving the map
+- **"Thumbnails"** button: photo groups (and single photos) are displayed as thumbnails with their photo count, like Apple Photos (choice remembered in the browser)
+- **"▶ Slideshow"** button in the list panel: opens a full-screen slideshow in a new tab of the photos in the visible area (and the filtered album), oldest first by default (order selectable: oldest first, newest first, random), with autoplay, keyboard arrows and a location mini-map (500 photos maximum)
+- Side list panel synchronized with the visible area (follows zoom and panning; links open in a new tab)
+- Album filter and place search (geocoder)
+- Admin-only **"Favorite places"** menu next to the album choice: recenters the map on a saved place
+- Creation of a Piwigo album from the photos visible on the map (administrators only; other users only see the lists)
+- "OSM Map Plus" page: full-screen map of all photos (logged-in users)
+- "Location" mini-map on photo pages (basemap menu, configurable basemap and height)
+- Access control: map reserved to logged-in users, or open to the public (public albums only)
 
-## Prérequis
+**Geotagging (administration)**
+- Batch manager, single mode: map, place search, Copy / Paste coordinates buttons, favorite places menu
+- "OSM Map Plus" tab on the photo edit page: map, search, favorite places, saving or clearing the GPS position
+- Same basemaps as the gallery ("Basemap" menu on every map)
+- GPS / EXIF tools: see below
 
-- Piwigo 13 ou supérieur, PHP 7.4 ou supérieur
-- Un navigateur avec **WebGL** pour les fonds OpenFreeMap, Satellite + noms et la vue 3D (les autres fonds fonctionnent sans)
-- Un accès Internet depuis le navigateur des visiteurs vers les services de cartes listés plus bas
-- Une clé API **CartoDB** gratuite uniquement si vous utilisez le fond Carto Voyager (voir Configuration)
+## Requirements
+
+- Piwigo 13 or later, PHP 7.4 or later
+- A browser with **WebGL** for the OpenFreeMap and Satellite + labels basemaps and the 3D view (other basemaps work without it)
+- Internet access from visitors' browsers to the map services listed below
+- The PHP `exif` extension for the GPS / EXIF comparison tools (optional)
+- A free **CartoDB** API key only if you use the Carto Voyager basemap (see Configuration)
 
 ## Installation
 
-1. Installer depuis Administration → Plugins → Ajouter un nouveau plugin (recherche « OSM Map Plus »), ou décompresser l'archive dans `plugins/osm_map/`
-2. Activer le plugin depuis Administration → Plugins
-3. Configurer depuis Administration → Plugins → OSM Map Plus (bouton « Paramètres »)
+1. Install from Administration → Plugins → Add a new plugin (search "OSM Map Plus"), or unzip the archive into `plugins/osm_map/`
+2. Activate the plugin in Administration → Plugins
+3. Configure it from Administration → Plugins → OSM Map Plus ("Settings" button)
 
-Pour mettre à jour : remplacer le dossier `plugins/osm_map/` (ou utiliser la mise à jour de Piwigo), puis vider le cache du navigateur (Ctrl/Cmd + Maj + R).
+To update: replace the `plugins/osm_map/` folder (or use Piwigo's update), then clear the browser cache (Ctrl/Cmd + Shift + R).
 
 ## Configuration
 
-| Option | Défaut | Description |
+| Option | Default | Description |
 |---|---|---|
-| Affichage public | Non | Carte visible par les visiteurs non connectés (photos des albums publics uniquement) |
-| Hauteur de la carte | 500 px | Entre 200 et 1200 px |
-| Hauteur carte mondiale | 600 px | Hauteur de la page « OSM Map Plus » (300 à 2000 px) |
-| Nombre max de photos | 5000 | Limite indicative pour la carte galerie (0 = illimité) |
-| Zoom initial | 5 | 1 = monde entier, 18 = détail rue ; la carte se recentre ensuite sur les photos |
-| Masquer si OSM natif actif | Non | Masque notre carte si le plugin `piwigo-openstreetmap` est actif, pour éviter deux cartes |
-| Clé API CartoDB | vide | Nécessaire pour le fond Carto Voyager (voir ci-dessous) |
-| Fond de carte — Galerie | Carto Voyager | Fond affiché à l'ouverture de la carte de la galerie |
-| Fond de carte — Page d'une photo | Carto Voyager | Fond de la mini-carte « Localisation » des pages photo |
-| Hauteur de la carte — Page d'une photo | 220 px | Hauteur de la mini-carte (150 à 800 px) |
-| Fond de carte — Gestion par lot | Carto Voyager | Fond affiché à l'ouverture des cartes du mode unitaire |
-| Hauteur de la carte — Gestion par lot | 280 px | Hauteur de chaque carte du mode unitaire (150 à 800 px) |
-| Fond de carte — Édition d'une photo | Carto Voyager | Fond de l'onglet « OSM Map Plus » de la page d'édition d'une photo |
-| Hauteur de la carte — Édition d'une photo | 400 px | Hauteur de la carte de l'onglet d'édition (200 à 1000 px) |
+| Public display | No | Map visible to non-logged-in visitors (photos of public albums only) |
+| Map height | 500 px | Between 200 and 1200 px |
+| World map height | 600 px | Height of the "OSM Map Plus" page (300 to 2000 px) |
+| Max number of photos | 5000 | Indicative limit for the gallery map (0 = unlimited) |
+| Initial zoom | 5 | 1 = whole world, 18 = street level; the map then recenters on the photos |
+| Hide if native OSM is active | No | Hides our map if the `piwigo-openstreetmap` plugin is active, to avoid two maps |
+| CartoDB API key | empty | Required for the Carto Voyager basemap (see below) |
+| Basemap — Gallery | Carto Voyager | Basemap shown when the gallery map opens |
+| Basemap — Photo page | Carto Voyager | Basemap of the "Location" mini-map on photo pages |
+| Map height — Photo page | 220 px | Height of the mini-map (150 to 800 px) |
+| Basemap — Batch manager | Carto Voyager | Basemap shown when the single-mode maps open |
+| Map height — Batch manager | 280 px | Height of each single-mode map (150 to 800 px) |
+| Basemap — Photo edit | Carto Voyager | Basemap of the "OSM Map Plus" tab of the photo edit page |
+| Map height — Photo edit | 400 px | Height of the edit tab map (200 to 1000 px) |
 
-Toutes les listes de fonds sont identiques. Les visiteurs et administrateurs peuvent changer de fond avec le menu « Fond » ; leur choix reste valable tant que le fond par défaut n'est pas modifié dans les paramètres.
+All basemap lists are identical. Visitors and administrators can change basemap with the "Basemap" menu; their choice remains valid as long as the default basemap is not changed in the settings.
 
-### Clé API CartoDB
+### CartoDB API key
 
-Depuis le 26/08/2026, les tuiles Carto Voyager nécessitent une clé gratuite : <https://carto.com/basemaps/apikey/>. Collez-la dans les paramètres du plugin. Les autres fonds n'en ont pas besoin. Si le plugin **Geo Album** est installé, la clé renseignée dans l'un des deux plugins est utilisée par l'autre.
+Since 2026-08-26, Carto Voyager tiles require a free key: <https://carto.com/basemaps/apikey/>. Paste it in the plugin settings. Other basemaps do not need one. If the **Geo Album** plugin is installed, the key entered in either plugin is used by the other.
 
-### Remarques
+### Notes
 
-- Dans la gestion par lot, les fonds vectoriels (OpenFreeMap, Satellite + noms) ne sont proposés que si la page affiche 8 photos ou moins : chaque carte de ce type consomme un contexte WebGL et les navigateurs en limitent le nombre.
-- Si le fond choisi ne répond pas (par exemple clé Carto absente), les cartes de géotaggage et la mini-carte des pages photo basculent automatiquement sur OpenStreetMap.
-- Compatibilité : le plugin réutilise le Leaflet déjà présent sur la page (par exemple celui de `piwigo-openstreetmap`) au lieu d'en charger un second.
+- In the batch manager, vector basemaps (OpenFreeMap, Satellite + labels) are only offered when the page shows 8 photos or fewer: each such map uses a WebGL context and browsers limit their number.
+- If the selected basemap does not respond (for example, missing Carto key), the geotagging maps and the photo-page mini-map automatically fall back to OpenStreetMap.
+- Compatibility: the plugin reuses the Leaflet already present on the page (for example the one from `piwigo-openstreetmap`) instead of loading a second one.
 
-## Services externes utilisés
+### How GPS coordinates are saved
 
-Les cartes chargent leurs ressources depuis le navigateur du visiteur :
+OSM Map Plus saves coordinates **only in the Piwigo database** (`latitude` and `longitude` columns). It does not write to file metadata (EXIF, XMP, IPTC).
 
-- [jsDelivr](https://www.jsdelivr.com/) et [unpkg](https://unpkg.com/) — bibliothèques Leaflet (et ses icônes), Leaflet.markercluster, MapLibre GL
-- [OpenStreetMap](https://www.openstreetmap.org/), [OpenStreetMap France](https://www.openstreetmap.fr/), [OpenTopoMap](https://opentopomap.org/) — tuiles
-- [CARTO](https://carto.com/) — tuiles Voyager (clé API)
-- [OpenFreeMap](https://openfreemap.org/) — fond vectoriel et noms de lieux
-- [Esri World Imagery](https://www.arcgis.com/) — imagerie satellite
-- [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) — relief de la vue 3D
-- [Nominatim](https://nominatim.org/) — géocodage (recherche de lieu)
+- Photo edit tab: saved directly in the database by OSM Map Plus.
+- Batch manager: OSM Map Plus shows the map and fills the `osmlat-ID` and `osmlon-ID` fields; saving is handled by the `piwigo-openstreetmap` handler (same field names). Keep that plugin active for batch saving.
+- To write coordinates into JPEG files, use a dedicated plugin such as `geo_tag_editor` (one photo at a time).
+- Note: a metadata synchronization from the files may overwrite coordinates saved only in the database. The tools below help to spot such differences.
 
-Respectez les conditions d'utilisation de chaque service, notamment pour les galeries à fort trafic.
+## GPS / EXIF tools (administration)
 
-## Crédits
+Buttons at the top of the plugin settings page (under the statistics). Reading the GPS of the files (JPEG/TIFF) is read-only and requires the PHP `exif` extension.
 
-**Conception, cahier des charges et tests**
+- **Database / file comparison**: on the photo edit tab, a banner compares the database position with the file's EXIF GPS (distance in m or km), with a second "file" map and a "Use the file position" button. In the batch manager, an orange banner flags the photos concerned.
+- **GPS / EXIF differences** (gallery audit): scans all JPEG/TIFF files in batches (distance threshold of your choice) and lists the differences with thumbnails, pagination (24 to 200 rows) and sorting (scan order, shooting date, distance, name). You can apply the file position to the database, row by row or in bulk, or validate the difference.
+- **Validated differences**: "Validate" keeps the database position and stops flagging it, as long as neither the database nor the file changes. Table `osm_map_exif_ok`, automatic backup in `_data/osm_map_validated.json` (kept on uninstall, reloaded on reinstall), JSON export/import.
+- **Photos without GPS**: paginated list (24 to 200 per page) of photos without a database position, with album filter and date sorting; clicking a thumbnail opens the position editor in a new tab. A marker flags photos whose file already contains a GPS position.
+- **Favorite places**: flat list (add, rename, fix, delete), a map with address search to create a place, and a general map of all places. "Favorite places" menu in the photo edit tab (with "Save this place"), in the batch manager and, for administrators, next to the album choice on the general map. Table `osm_map_places`, automatic backup in `_data/osm_map_places.json` (reloaded on reinstall), JSON export/import, and import of the places of `piwigo-openstreetmap` if installed (duplicates ignored).
+
+## External services used
+
+Maps load their resources from the visitor's browser:
+
+- [jsDelivr](https://www.jsdelivr.com/) and [unpkg](https://unpkg.com/) — Leaflet libraries (and icons), Leaflet.markercluster, MapLibre GL
+- [OpenStreetMap](https://www.openstreetmap.org/), [OpenStreetMap France](https://www.openstreetmap.fr/), [OpenTopoMap](https://opentopomap.org/) — tiles
+- [CARTO](https://carto.com/) — Voyager tiles (API key)
+- [OpenFreeMap](https://openfreemap.org/) — vector basemap and place names
+- [Esri World Imagery](https://www.arcgis.com/) — satellite imagery
+- [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) — 3D view relief
+- [Nominatim](https://nominatim.org/) — geocoding (place search)
+
+Please respect each service's terms of use, especially for high-traffic galleries.
+
+## Credits
+
+**Design, specifications and testing**
 Bobcat-Fr
 
-**Développement assisté par IA**
-Code généré par [Claude](https://claude.ai) (Anthropic) via une session de développement itératif — spécifications, corrections et validation assurées par Bobcat-Fr.
+**AI-assisted development**
+Code generated by [Claude](https://claude.ai) (Anthropic) in an iterative development session — specifications, fixes and validation by Bobcat-Fr.
 
-**Bibliothèques utilisées**
-- [Leaflet](https://leafletjs.com/) 1.9.4 — carte interactive (BSD 2-Clause)
+**Libraries**
+- [Leaflet](https://leafletjs.com/) 1.9.4 — interactive map (BSD 2-Clause)
 - [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) 1.5.3 — clustering (MIT)
-- [MapLibre GL JS](https://maplibre.org/) 4.7.1 et [maplibre-gl-leaflet](https://github.com/maplibre/maplibre-gl-leaflet) 0.0.22 — fonds vectoriels et vue 3D (BSD 3-Clause / ISC)
-- Données cartographiques © contributeurs [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL)
+- [MapLibre GL JS](https://maplibre.org/) 4.7.1 and [maplibre-gl-leaflet](https://github.com/maplibre/maplibre-gl-leaflet) 0.0.22 — vector basemaps and 3D view (BSD 3-Clause / ISC)
+- Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL)
 
-## Licence
+## License
 
-GNU GPL-2.0 ou ultérieure — voir le fichier [LICENSE](LICENSE).
+GNU GPL-2.0 or later — see the [LICENSE](LICENSE) file.
 
 ## Changelog
 
-- **1.0.7** — Menu « Fond » sur la carte de la galerie et sur les cartes de géotaggage : ajout d'OpenStreetMap France, OpenFreeMap et Satellite + noms. Bouton « 3D » (vue en relief dans un nouvel onglet). La vue 3D propose une case « Globe » : la Terre en sphère zoomable avec atmosphère (MapLibre GL JS 5). Dans l'administration, si un autre plugin impose un ancien Leaflet (< 1.0), OpenFreeMap n'est pas proposé et « Satellite + noms » passe en version raster Esri. Les paramètres proposent la même liste de fonds pour la galerie et le géotaggage. Compatibilité avec `piwigo-openstreetmap` (une seule instance de Leaflet sur la page). Conformité aux recommandations Piwigo : fichiers `index.php`, `maintain.class.php` (installation, mise à jour, désinstallation propre des réglages), fichiers de langue chargés, dossier `en_UK`. Cartes de géotaggage et mini-carte des pages photo plus robustes (recalcul de taille, bascule automatique sur OpenStreetMap si le fond ne répond pas). Correction d'un blocage de la page galerie lorsque le fond par défaut était OpenFreeMap ou Satellite + noms. Marges latérales et zoom à la molette après clic sur les cartes. Création d'album réservée aux administrateurs.
-- **1.0.6** — Clé API CartoDB partagée avec le plugin Geo Album
-- **1.0.5** — Bouton « Paramètres » dans la liste des plugins
-- **1.0.4** — Adaptation à la clé API CARTO, correction de bug mineur
-- **1.0.3** — Adaptation à CARTO : clé API nécessaire pour les tuiles Voyager
-- **1.0.2** — Correction de la liste des albums, recherche multicritère lieux et albums, correction des en-têtes pour publication
-- **1.0.1** — Changement de numérotation pour la publication
+- **1.0.8** — Photo edit: comparison of the database position with the file's EXIF GPS (JPEG, read-only): warning banner with the distance, second "file" map, "Use the file position" button. Difference alert in the batch manager, "GPS / EXIF differences" audit page and "Photos without GPS" page (paginated) covering the whole gallery, validation of differences, and favorite places (own tables + backup in `_data`). New "Slideshow" button (full-screen slideshow of the photos in the visible area, in a new tab). "Thumbnails" button: photo groups and single photos displayed as thumbnails with their count (like Apple Photos). The list panel now follows zoom and panning, with wider thumbnails (96×72); photo links open in a new tab. 3D view: photos taken at the same spot stay grouped with their count, and a click lists all photos of the group. Fixes: the "OSM Map Plus" page loaded an old cached stylesheet; "countEl is not defined" error when zooming on an area without photos.
+- **1.0.7** — "Basemap" menu on the gallery map and on the geotagging maps: added OpenStreetMap France, OpenFreeMap and Satellite + labels. "3D" button (terrain view in a new tab). The 3D view has a "Globe" checkbox: the Earth as a zoomable sphere with atmosphere (MapLibre GL JS 5). In the administration, if another plugin forces an old Leaflet (< 1.0), OpenFreeMap is not offered and "Satellite + labels" falls back to the Esri raster version. The settings offer the same basemap list for the gallery and geotagging. Compatibility with `piwigo-openstreetmap` (a single Leaflet instance on the page). Compliance with Piwigo recommendations: `index.php` files, `maintain.class.php` (install, update, clean uninstall of settings), language files loaded, `en_UK` folder. More robust geotagging maps and photo-page mini-map (size recalculation, automatic fallback to OpenStreetMap if the basemap does not respond). Fixed a gallery page freeze when the default basemap was OpenFreeMap or Satellite + labels. Side margins and wheel zoom after click on the maps. Album creation restricted to administrators.
+- **1.0.6** — CartoDB API key shared with the Geo Album plugin
+- **1.0.5** — "Settings" button in the plugin list
+- **1.0.4** — Adaptation to the CARTO API key, minor bug fix
+- **1.0.3** — Adaptation to CARTO: API key required for Voyager tiles
+- **1.0.2** — Album list fix, multi-criteria search for places and albums, header fixes for publication
+- **1.0.1** — Version numbering change for publication
