@@ -46,13 +46,42 @@ if (isset($_POST['osm_save'])) {
 }
 
 // ── Lecture photo ─────────────────────────────────────────────────────────
-$res   = pwg_query('SELECT id, name, file, latitude, longitude FROM '.IMAGES_TABLE.' WHERE id='.$image_id);
+$res   = pwg_query('SELECT * FROM '.IMAGES_TABLE.' WHERE id='.$image_id);
 $photo = pwg_db_fetch_assoc($res);
 if (!$photo) die('Photo introuvable');
 
 $lat  = ($photo['latitude']  !== null && $photo['latitude']  !== '') ? (float)$photo['latitude']  : '';
 $lon  = ($photo['longitude'] !== null && $photo['longitude'] !== '') ? (float)$photo['longitude'] : '';
+// Petite vignette de rappel de la photo en cours
+$thumb_url = '';
+try {
+    foreach (array('include/derivative_params.inc.php','include/derivative_std_params.inc.php','include/functions_picture.inc.php') as $f_inc) {
+        if (file_exists(PHPWG_ROOT_PATH . $f_inc)) { include_once(PHPWG_ROOT_PATH . $f_inc); }
+    }
+    $deriv = new DerivativeImage(ImageStdParams::get_by_type(IMG_SQUARE), new SrcImage($photo));
+    $u = $deriv->get_url();
+    $thumb_url = (strpos($u, 'http') === 0 || $u[0] === '/') ? $u : get_root_url() . ltrim($u, './');
+} catch (Throwable $e_th) {
+    $thumb_url = get_root_url() . '_data/i/' . preg_replace('/^\.\//', '', dirname($photo['path'])) . '/'
+               . pathinfo($photo['path'], PATHINFO_FILENAME) . '-sq.' . pathinfo($photo['path'], PATHINFO_EXTENSION);
+}
 $name = $photo['name'] ? $photo['name'] : pathinfo($photo['file'], PATHINFO_FILENAME);
+
+// ── GPS lu dans le fichier (EXIF) pour comparaison avec la base ───────────
+// Lecture seule : rien n'est écrit dans le fichier.
+include_once(dirname(__FILE__) . '/../include/exif_gps.inc.php');
+include_once(dirname(__FILE__) . '/../include/places.inc.php');
+$osm_places = osmme_pl_list();
+$exif_gps  = osmme_read_exif_gps(PHPWG_ROOT_PATH . $photo['path']);
+$exif_dist = null;
+$is_validated = false;
+if ($exif_gps) {
+    $okm = osmme_ok_load(array($image_id));
+    $is_validated = isset($okm[$image_id]) && osmme_ok_matches($okm[$image_id], $photo, $exif_gps);
+}
+if ($exif_gps && $lat !== '' && $lon !== '') {
+    $exif_dist = osmme_distance_m((float)$lat, (float)$lon, $exif_gps['lat'], $exif_gps['lon']);
+}
 
 // ── Tabsheet — reproduit exactement le pattern de admin_photo.php d'OSM Geotag ──
 // L'URL de base doit être page=photo-XXXX pour que les onglets natifs fonctionnent
@@ -119,9 +148,43 @@ $tiles = array(
 );
 $t = isset($tiles[$tile_geotag]) ? $tiles[$tile_geotag] : $tiles['carto_voyager'];
 
+$cmp_html = '';
+if ($exif_gps) {
+    $e = number_format($exif_gps['lat'], 6, '.', '') . ', ' . number_format($exif_gps['lon'], 6, '.', '');
+    if ($is_validated && ($lat === '' || $exif_dist > 15)) {
+        $cmp_html .= '<div class="osm-cmp osm-cmp-ok"><h4>&#10003; Écart validé : la position de la base est conservée</h4>'
+                   . 'Fichier (EXIF) : <code>' . $e . '</code> &mdash; cet écart n\'est plus signalé tant que la base et le fichier ne changent pas.<br>';
+    } elseif ($lat === '') {
+        $cmp_html .= '<div class="osm-cmp osm-cmp-diff"><h4>&#9888;&#65039; Le fichier contient un GPS (EXIF), mais la base n\'en a pas</h4>'
+                   . 'Position du fichier : <code>' . $e . '</code><br>';
+    } elseif ($exif_dist > 15) {
+        $d = $exif_dist >= 1000 ? number_format($exif_dist / 1000, 1, ',', ' ') . ' km' : round($exif_dist) . ' m';
+        $cmp_html .= '<div class="osm-cmp osm-cmp-diff"><h4>&#9888;&#65039; La position en base diffère de celle du fichier (EXIF) &mdash; écart : ' . $d . '</h4>'
+                   . 'Base de données : <code>' . number_format((float)$lat, 6, '.', '') . ', ' . number_format((float)$lon, 6, '.', '') . '</code> (carte ci-dessus)<br>'
+                   . 'Fichier (EXIF) : <code>' . $e . '</code> (carte ci-dessous)<br>';
+    } else {
+        $cmp_html .= '<div class="osm-cmp osm-cmp-ok"><h4>&#10003; La position en base correspond à celle du fichier (EXIF)</h4>'
+                   . 'Fichier (EXIF) : <code>' . $e . '</code><br>';
+    }
+    $cmp_html .= '<div id="osm-exif-map"></div>'
+               . '<button type="button" id="osm-use-exif">&#8593; Utiliser la position du fichier (puis Enregistrer)</button>'
+               . (($lat === '' || $exif_dist > 15)
+                   ? ' <button type="button" id="osm-validate-btn" data-act="' . ($is_validated ? 'unvalidate' : 'validate') . '" style="padding:6px 14px;background:#fff;border:1px solid #5f6368;border-radius:4px;cursor:pointer;margin-left:6px;">'
+                     . ($is_validated ? '&#8634; Retirer la validation' : '&#10003; Valider l\'écart (garder la base)') . '</button>'
+                   : '')
+               . '</div>';
+} else {
+    $ext_p = strtolower(pathinfo($photo['file'], PATHINFO_EXTENSION));
+    $why = in_array($ext_p, array('jpg', 'jpeg', 'tif', 'tiff')) ? 'Aucun GPS dans les métadonnées du fichier.' : 'Format sans lecture EXIF (seule la base de données est utilisée).';
+    $cmp_html = '<div class="osm-cmp osm-cmp-none">&#8505;&#65039; ' . $why . '</div>';
+}
+
 $html = '
 <style>
 #osm-photo-edit { padding:20px; max-width:900px; }
+.osm-edit-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:12px; }
+.osm-edit-head h3 { margin:0 !important; }
+.osm-edit-thumb img { display:block; width:96px; height:96px; object-fit:cover; border:1px solid #d0d0d0; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.15); }
 #osm-photo-edit h3 { margin:0 0 16px; font-size:1.1rem; }
 #osm-geocoder-wrap { display:flex; gap:8px; margin-bottom:12px; }
 #osm-geocoder-input { flex:1; padding:7px 10px; border:1px solid #ccc; border-radius:4px; font-size:0.9rem; }
@@ -134,6 +197,13 @@ $html = '
 .osm-coords-row { display:flex; gap:20px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
 .osm-coords-row label { display:flex; align-items:center; gap:8px; font-size:0.9rem; }
 .osm-coords-row input { width:140px; padding:5px 8px; border:1px solid #ccc; border-radius:4px; font-family:monospace; }
+.osm-cmp { border:1px solid #d0d0d0; border-radius:4px; padding:10px 14px; margin:18px 0 0; font-size:0.9rem; }
+.osm-cmp h4 { margin:0 0 8px; font-size:0.95rem; }
+.osm-cmp.osm-cmp-ok { background:#e6f4ea; border-color:#a8d5b5; }
+.osm-cmp.osm-cmp-diff { background:#fff4e5; border-color:#f5c27a; }
+.osm-cmp.osm-cmp-none { background:#f5f5f5; color:#555; }
+#osm-exif-map { height:240px; border:1px solid #d0d0d0; border-radius:4px; margin:10px 30px 4px; position:relative; }
+#osm-use-exif { padding:6px 14px; background:#fff; color:#1a73e8; border:1px solid #1a73e8; border-radius:4px; cursor:pointer; margin-top:6px; }
 .osm-hint { font-size:0.82em; color:#666; background:#fffbe6; border:1px solid #ffe082; border-radius:3px; padding:6px 10px; margin-bottom:14px; }
 #osm-save-btn { padding:8px 22px; background:#1a73e8; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:600; font-size:0.9rem; }
 #osm-clear-btn { padding:8px 16px; background:#fff; color:#d93025; border:1px solid #d93025; border-radius:4px; cursor:pointer; font-size:0.9rem; margin-left:8px; }
@@ -142,7 +212,10 @@ $html = '
 </style>
 
 <div id="osm-photo-edit">
-  <h3>&#127760; Géotaggage — ' . htmlspecialchars($name) . '</h3>';
+  <div class="osm-edit-head">
+    <h3>&#127760; Géotaggage — ' . htmlspecialchars($name) . '</h3>'
+    . ($thumb_url !== '' ? '<a class="osm-edit-thumb" href="' . htmlspecialchars(get_root_url() . 'picture.php?/' . $image_id) . '" target="_blank" rel="noopener" title="' . htmlspecialchars($name) . '"><img src="' . htmlspecialchars($thumb_url) . '" alt=""></a>' : '') . '
+  </div>';
 
 if ($msg_info)  $html .= '<div class="osm-msg-info">'  . htmlspecialchars($msg_info)  . '</div>';
 if ($msg_error) $html .= '<div class="osm-msg-error">' . htmlspecialchars($msg_error) . '</div>';
@@ -155,6 +228,13 @@ $html .= '
     <select id="osm-basemap-edit" title="Fond de carte" style="padding:5px 8px;border:1px solid #ccc;border-radius:4px;"></select>
     <button type="button" id="osm-edit-3d" title="Ouvrir la carte en relief 3D dans un nouvel onglet" style="padding:7px 12px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#127956;&#65039; 3D</button>
     <div id="osm-geocoder-results" style="display:none;"></div>
+  </div>
+
+  <div class="osm-places-row" style="margin:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:0.9rem;">
+    <label for="osm-places-edit">&#11088; Lieux favoris&nbsp;:</label>
+    <select id="osm-places-edit" style="padding:5px 8px;border:1px solid #ccc;border-radius:4px;max-width:320px;"><option value="">--</option></select>
+    <button type="button" id="osm-place-save" title="Enregistrer la position du marqueur comme lieu favori" style="padding:5px 12px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#10133; Enregistrer ce lieu</button>
+    <a href="' . get_root_url() . 'admin.php?page=plugin&amp;section=osm_map/admin/places.php" target="_blank" rel="noopener">G&eacute;rer les lieux</a>
   </div>
 
   <div class="osm-hint">&#128161; Cliquez sur la carte ou déplacez le marqueur pour modifier la position, puis cliquez <strong>Enregistrer</strong>.</div>
@@ -172,6 +252,7 @@ $html .= '
     <button type="submit" name="osm_save" id="osm-save-btn">&#10003; Enregistrer</button>
     <button type="button" id="osm-clear-btn">&#10005; Effacer GPS</button>
   </form>
+' . $cmp_html . '
 </div>
 
 <script>
@@ -179,6 +260,11 @@ var OSM_EDIT_LAT  = ' . $init_lat . ';
 var OSM_EDIT_LON  = ' . $init_lon . ';
 var OSM_EDIT_ZOOM = ' . $init_zoom . ';
 var OSM_EDIT_ROOT = ' . json_encode($root) . ';
+var OSM_EXIF = ' . json_encode($exif_gps) . ';
+var OSM_PLACES = ' . json_encode($osm_places) . ';
+var OSM_PLACES_EP = ' . json_encode($root . 'plugins/osm_map/osmme-places.php') . ';
+var OSM_VALID_EP = ' . json_encode($root . 'plugins/osm_map/osmme-exifcheck.php') . ';
+var OSM_VALID_TOKEN = ' . json_encode(get_pwg_token()) . ';
 var OSM_EDIT_ID = ' . (int)$image_id . ';
 var OSM_EDIT_TILE_KEY = ' . json_encode($tile_geotag) . ';
 var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $t[2] . '};
@@ -217,10 +303,42 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
       bindMarker();
     }
 
+    initExifMap(_L);
+
     map.on("click", function(e) {
       if (marker) { marker.setLatLng(e.latlng); }
       else { marker = _L.marker(e.latlng, {draggable: true}).addTo(map); bindMarker(); }
       setCoords(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
+    });
+  }
+
+  function initExifMap(_L) {
+    var el = document.getElementById("osm-exif-map");
+    if (!el || !OSM_EXIF) return;
+    var em = _L.map(el, {center: [OSM_EXIF.lat, OSM_EXIF.lon], zoom: OSM_EDIT_ZOOM, scrollWheelZoom: false, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false});
+    _L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "&copy; OpenStreetMap contributors", maxZoom: 19}).addTo(em);
+    _L.marker([OSM_EXIF.lat, OSM_EXIF.lon]).addTo(em).bindPopup("Position du fichier (EXIF)");
+    if (OSM_EDIT_LAT && OSM_EDIT_LON) {
+      _L.circleMarker([OSM_EDIT_LAT, OSM_EDIT_LON], {radius: 7, color: "#d93025", weight: 2, fillOpacity: 0.4}).addTo(em).bindPopup("Position en base");
+      em.fitBounds([[OSM_EXIF.lat, OSM_EXIF.lon], [OSM_EDIT_LAT, OSM_EDIT_LON]], {padding: [30, 30], maxZoom: 16});
+    }
+    [150, 500, 1200].forEach(function(t) { setTimeout(function() { em.invalidateSize(); }, t); });
+    var vb = document.getElementById("osm-validate-btn");
+    if (vb) vb.addEventListener("click", function() {
+      var act = vb.getAttribute("data-act"), fd = new FormData();
+      fd.append(act, "1"); fd.append("pwg_token", OSM_VALID_TOKEN); fd.append("ids", String(OSM_EDIT_ID));
+      fetch(OSM_VALID_EP, {method: "POST", body: fd, credentials: "same-origin"}).then(function(r) { return r.json(); })
+        .then(function(d) { if (d.done && d.done.length) { location.reload(); } else { alert("Impossible de modifier la validation."); } })
+        .catch(function() { alert("Erreur r\u00e9seau."); });
+    });
+    var btn = document.getElementById("osm-use-exif");
+    if (btn) btn.addEventListener("click", function() {
+      var ll = [OSM_EXIF.lat, OSM_EXIF.lon];
+      if (marker) { marker.setLatLng(ll); }
+      else { marker = _L.marker(ll, {draggable: true}).addTo(map); bindMarker(); }
+      map.setView(ll, Math.max(map.getZoom(), 13));
+      setCoords(OSM_EXIF.lat.toFixed(6), OSM_EXIF.lon.toFixed(6));
+      window.scrollTo({top: 0, behavior: "smooth"});
     });
   }
 
@@ -235,6 +353,37 @@ var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $
     document.getElementById("osm-lat").value = lat;
     document.getElementById("osm-lon").value = lon;
   }
+
+  // Lieux favoris
+  var plSel = document.getElementById("osm-places-edit");
+  function fillPlaces() {
+    plSel.length = 1;
+    OSM_PLACES.forEach(function(p, i) { var o = document.createElement("option"); o.value = i; o.textContent = p.name; plSel.appendChild(o); });
+  }
+  fillPlaces();
+  plSel.addEventListener("change", function() {
+    var p = OSM_PLACES[plSel.value], _L = window.L;
+    if (!p || !map || !_L) return;
+    if (marker) { marker.setLatLng([p.lat, p.lon]); }
+    else { marker = _L.marker([p.lat, p.lon], {draggable: true}).addTo(map); bindMarker(); }
+    map.setView([p.lat, p.lon], Math.max(map.getZoom(), 14));
+    setCoords(p.lat.toFixed(6), p.lon.toFixed(6));
+  });
+  document.getElementById("osm-place-save").addEventListener("click", function() {
+    var la = document.getElementById("osm-lat").value, lo = document.getElementById("osm-lon").value;
+    if (!la || !lo) { alert("Placez d\u2019abord un marqueur sur la carte."); return; }
+    var name = prompt("Nom du lieu favori :");
+    if (!name || !name.trim()) return;
+    var fd = new FormData();
+    fd.append("add", "1"); fd.append("pwg_token", OSM_VALID_TOKEN); fd.append("name", name); fd.append("lat", la); fd.append("lon", lo);
+    fetch(OSM_PLACES_EP, {method: "POST", body: fd, credentials: "same-origin"}).then(function(r) { return r.json(); }).then(function(d) {
+      if (!d.ok) { alert("Lieu invalide."); return; }
+      return fetch(OSM_PLACES_EP + "?list=1", {credentials: "same-origin"}).then(function(r) { return r.json(); }).then(function(l) {
+        OSM_PLACES = l.places || OSM_PLACES; fillPlaces();
+        for (var i = 0; i < OSM_PLACES.length; i++) { if (OSM_PLACES[i].id === d.id) { plSel.value = i; break; } }
+      });
+    }).catch(function() { alert("Erreur r\u00e9seau."); });
+  });
 
   // Géocodeur Nominatim
   var geocInput = document.getElementById("osm-geocoder-input");
