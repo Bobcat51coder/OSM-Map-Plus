@@ -1,6 +1,7 @@
 <div class="full-line-box">
   <strong>&#128506; OSM Map Plus &mdash; G&eacute;otaggage</strong>
 </div>
+<div class="full-line-box osmme-exif-alert" id="osmme-exif-alert-{$element.ID}" data-id="{$element.ID}" style="display:none;"></div>
 
 <div class="half-line-info-box">
   <label>Latitude</label>
@@ -18,6 +19,8 @@
       style="flex:1;min-width:150px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.88rem;">
     <button type="button" id="osmme-search-btn-{$element.ID}" title="Rechercher"
       style="padding:5px 10px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;">&#128269;</button>
+    <select id="osmme-places-{$element.ID}" title="Lieux favoris"
+      style="padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;max-width:180px;"><option value="">&#11088; Lieux favoris</option></select>
     <select id="osmme-basemap-{$element.ID}" title="Fond de carte"
       style="padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;"></select>
     <button type="button" id="osmme-3d-btn-{$element.ID}" title="Ouvrir la carte en relief 3D dans un nouvel onglet"
@@ -130,6 +133,19 @@ var osmUnitData_{$element.ID} = {
     document.getElementById('osmme-lon-{/literal}{$element.ID}{literal}').value = lon;
   }
 
+  window['osmmePlace_' + imageID] = function(lat, lon) { placeMarker(lat, lon); };
+
+  (function() {
+    var sel = document.getElementById('osmme-places-' + imageID), list = window.OSM_PLACES || [];
+    if (!sel) return;
+    if (!list.length) { sel.style.display = 'none'; return; }
+    list.forEach(function(p, i) { var o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+    sel.addEventListener('change', function() {
+      var p = list[sel.value];
+      if (p) { placeMarker(p.lat, p.lon); }
+    });
+  })();
+
   function placeMarker(lat, lon) {
     var _L = window.OSM_L || window.L;
     if (!map || !_L) return;
@@ -239,3 +255,43 @@ var osmUnitData_{$element.ID} = {
 })();
 {/literal}
 </script>
+
+{literal}
+<script>
+(function() {
+  if (window.__osmmeExifInit) return;
+  window.__osmmeExifInit = true;
+  function fmt(e) { return e.lat.toFixed(6) + ', ' + e.lon.toFixed(6); }
+  function dist(m) { return m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : m + ' m'; }
+  function run() {
+    var boxes = document.querySelectorAll('.osmme-exif-alert');
+    if (!boxes.length || !window.OSM_BATCH_ROOT) return;
+    var ids = [];
+    boxes.forEach(function(b) { ids.push(b.getAttribute('data-id')); });
+    var url = window.OSM_BATCH_ROOT + 'plugins/osm_map/osmme-exifcheck.php?ids=' + ids.join(',');
+    fetch(url, {credentials: 'same-origin'}).then(function(r) { return r.json(); }).then(function(data) {
+      (data.items || []).forEach(function(it) {
+        var box = document.getElementById('osmme-exif-alert-' + it.id);
+        if (!box || it.validated || (it.state !== 'diff' && it.state !== 'dbempty')) return;
+        var msg = it.state === 'diff'
+          ? '&#9888;&#65039; <strong>La position en base diff\u00e8re du GPS EXIF du fichier</strong> (\u00e9cart ' + dist(it.dist) + ') \u2014 fichier : <code>' + fmt(it.exif) + '</code>'
+          : '&#9888;&#65039; <strong>Le fichier contient un GPS (EXIF) mais la base n\'en a pas</strong> \u2014 fichier : <code>' + fmt(it.exif) + '</code>';
+        box.style.cssText = 'display:block;background:#fff4e5;border:1px solid #f5c27a;border-radius:4px;padding:6px 10px;font-size:0.85rem;';
+        box.innerHTML = msg + ' <button type="button" style="margin-left:8px;padding:3px 10px;border:1px solid #1a73e8;background:#fff;color:#1a73e8;border-radius:4px;cursor:pointer;">Utiliser la position du fichier</button>';
+        box.querySelector('button').addEventListener('click', function() {
+          var f = window['osmmePlace_' + it.id];
+          if (f) { f(it.exif.lat, it.exif.lon); }
+          else {
+            document.getElementById('osmme-lat-' + it.id).value = it.exif.lat.toFixed(6);
+            document.getElementById('osmme-lon-' + it.id).value = it.exif.lon.toFixed(6);
+          }
+          box.style.background = '#e6f4ea'; box.style.borderColor = '#a8d5b5';
+          box.innerHTML = '&#10003; Position du fichier appliqu\u00e9e aux champs \u2014 pensez \u00e0 <strong>valider la page</strong> pour enregistrer.';
+        });
+      });
+    }).catch(function() {});
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', run); } else { setTimeout(run, 0); }
+})();
+</script>
+{/literal}
