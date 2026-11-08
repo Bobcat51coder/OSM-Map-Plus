@@ -127,7 +127,9 @@ var OSMMap = (function () {
           _renderMarkers(allPhotos);
           // Réactiver après un délai suffisant pour laisser les chunks se charger
           setTimeout(function() {
-            // moveend est activé après le chargement des données (voir init)
+            // Le panneau suit désormais la zone visible (zoom / déplacement)
+            map.off('moveend zoomend', _updatePanelFromBounds);
+            map.on('moveend zoomend', _updatePanelFromBounds);
             _updatePanelFromBounds();
           }, 200);
           _showLoading(false);
@@ -243,6 +245,10 @@ var OSMMap = (function () {
       clusterGroup = L.featureGroup();
       clusterGroup.addLayers = function (arr) { var g = this; arr.forEach(function (m) { g.addLayer(m); }); };
     } else clusterGroup = L.markerClusterGroup({
+      iconCreateFunction: function (cluster) {
+        return thumbsMode ? _thumbClusterIcon(cluster)
+                          : L.MarkerClusterGroup.prototype._defaultIconCreateFunction.call(this, cluster);
+      },
       chunkedLoading: true,
       chunkSize: 500,           // chunks plus grands = moins de passes RAF
       chunkDelay: 10,           // délai minimal entre chunks
@@ -262,6 +268,7 @@ var OSMMap = (function () {
     // Le fond vectoriel (MapLibre) est repositionné à chaque déplacement / redimensionnement
     function syncBase() { if (baseLayer && baseLayer._update && baseKey && TILES[baseKey] && TILES[baseKey].vector) { try { baseLayer._update(); } catch (e) {} } }
     map.on('moveend zoomend resize', syncBase);
+    map.on('moveend zoomend', function () { if (thumbsMode) { _scanTries = 0; clearTimeout(_scanTimer); _scanTimer = setTimeout(_scanThumbs, 350); } });
   }
 
   // ── Gestion des fonds de carte ────────────────────────────────────────────
@@ -394,8 +401,63 @@ var OSMMap = (function () {
     btn3d.innerHTML = '&#127956;&#65039; 3D';
     btn3d.addEventListener('click', _open3D);
 
+    var btnTh = document.createElement('button');
+    btnTh.id = 'osm-btn-thumbs';
+    btnTh.type = 'button';
+    btnTh.title = 'Afficher les groupes de photos sous forme de vignettes';
+    btnTh.innerHTML = '&#128444;&#65039; Vignettes';
+    btnTh.addEventListener('click', _toggleThumbs);
+
     wrap.appendChild(label); wrap.appendChild(sel); wrap.appendChild(btn3d);
+    if (L.markerClusterGroup) { wrap.appendChild(btnTh); setTimeout(_syncThumbsButton, 0); }
     anchor.parentNode.insertBefore(wrap, anchor);
+  }
+
+  // Album filtré en cours (liste déroulante, ou page d'album via OSM_POINTS_URL)
+  function _currentCat() {
+    var sel = document.getElementById('osm-album-filter');
+    var cat = sel ? parseInt(sel.value, 10) : 0;
+    if (!cat) {
+      var m = /[?&]cat_id=(\d+)/.exec(window.OSM_POINTS_URL || '');
+      if (m) cat = parseInt(m[1], 10);
+    }
+    return cat || 0;
+  }
+
+  // Diaporama (nouvel onglet) des photos de la zone visible, par date croissante
+  function _openSlideshow() {
+    if (!map) return;
+    var b = map.getBounds();
+    var url = (window.OSM_ROOT || '') + 'plugins/osm_map/osmme-slideshow.php'
+            + '?s=' + b.getSouth().toFixed(5) + '&n=' + b.getNorth().toFixed(5)
+            + '&w=' + b.getWest().toFixed(5) + '&e=' + b.getEast().toFixed(5);
+    var cat = _currentCat();
+    if (cat) url += '&cat_id=' + cat;
+    var ord = document.getElementById('osm-slideshow-order');
+    if (ord) { url += '&order=' + ord.value; try { window.localStorage.setItem('osmme_slideshow_order', ord.value); } catch (e) {} }
+    window.open(url, '_blank', 'noopener');
+  }
+  function _addSlideshowButton() {
+    if (document.getElementById('osm-btn-slideshow')) return;
+    var closeEl = document.getElementById('osm-panel-close');
+    var head = document.querySelector('#osm-panel .osm-panel-header') || (closeEl && closeEl.parentNode);
+    if (!head) return;
+    var btn = document.createElement('button');
+    btn.id = 'osm-btn-slideshow';
+    btn.type = 'button';
+    btn.title = 'Lancer un diaporama des photos de la zone visible (nouvel onglet)';
+    btn.innerHTML = '&#9654; Diaporama';
+    btn.addEventListener('click', _openSlideshow);
+    var ord = document.createElement('select');
+    ord.id = 'osm-slideshow-order';
+    ord.title = 'Ordre du diaporama';
+    [['asc', 'Date \u2191'], ['desc', 'Date \u2193'], ['rand', 'Al\u00e9atoire']].forEach(function (o) {
+      var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; ord.appendChild(op);
+    });
+    try { var sv = window.localStorage.getItem('osmme_slideshow_order'); if (sv) ord.value = sv; } catch (e) {}
+    var close = document.getElementById('osm-panel-close');
+    if (close && close.parentNode === head) { head.insertBefore(ord, close); head.insertBefore(btn, close); }
+    else { head.appendChild(ord); head.appendChild(btn); }
   }
 
   // Ouvre la vue 3D sur la zone courante, avec le filtre album en cours
@@ -420,8 +482,97 @@ var OSMMap = (function () {
   // Token pour annuler un rendu en cours si un nouveau démarre (filtre album)
   var _renderToken = 0;
 
+  // ── Mode « Vignettes » : groupes et photos isolées affichés sous forme de miniatures ──
+  var thumbsMode = false;
+  try { thumbsMode = window.localStorage.getItem('osmme_thumbs') === '1'; } catch (e) {}
+  var _thumbCache = {}, _thumbWanted = {}, _thumbAsked = {}, _thumbTimer = null, _lastPhotos = null;
+
+  function _cssUrl(u) { return String(u).replace(/"/g, '%22').replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29'); }
+  function _applyThumb(id) {
+    var u = _thumbCache[id];
+    if (!u) return;
+    var els = document.querySelectorAll('.osm-thumb-img[data-pid="' + id + '"]');
+    for (var i = 0; i < els.length; i++) { els[i].style.backgroundImage = 'url("' + _cssUrl(u) + '")'; els[i].setAttribute('data-ok', '1'); }
+  }
+  function _flushThumbs() {
+    _thumbTimer = null;
+    var all = Object.keys(_thumbWanted).filter(function (id) { return !_thumbCache[id] && !_thumbAsked[id]; });
+    var ids = all.slice(0, 100);
+    _thumbWanted = {};
+    all.slice(100).forEach(function (id) { _thumbWanted[id] = 1; });      // le reste part au lot suivant
+    if (all.length > 100) _thumbTimer = setTimeout(_flushThumbs, 60);
+    if (!ids.length || !window.OSM_PHOTO_URL) return;
+    ids.forEach(function (id) { _thumbAsked[id] = 1; });
+    fetch(window.OSM_PHOTO_URL + '?ids=' + ids.join(','), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        var got = {};
+        (list || []).forEach(function (d) { if (d && d.thumbnail_url) { got[d.id] = 1; _thumbCache[d.id] = d.thumbnail_url; _applyThumb(d.id); } });
+        ids.forEach(function (id) { if (!got[id]) delete _thumbAsked[id]; });   // réessayé plus tard si absent
+        _scanThumbs();
+      })
+      .catch(function () { ids.forEach(function (id) { delete _thumbAsked[id]; }); });
+  }
+  function _wantThumb(id) {
+    if (!id || _thumbCache[id] || _thumbAsked[id]) return;
+    _thumbWanted[id] = 1;
+    if (!_thumbTimer) _thumbTimer = setTimeout(_flushThumbs, 120);
+  }
+  // Rattrape les vignettes dont l'image n'a pas été appliquée (icône créée avant l'arrivée de la réponse)
+  var _scanTimer = null, _scanTries = 0;
+  function _scanThumbs() {
+    var els = document.querySelectorAll('.osm-thumb-img:not([data-ok])');
+    var missing = 0;
+    for (var i = 0; i < els.length; i++) {
+      var id = els[i].getAttribute('data-pid');
+      if (_thumbCache[id]) { _applyThumb(id); } else { missing++; _wantThumb(id); }
+    }
+    if (missing && _scanTries < 8) { _scanTries++; clearTimeout(_scanTimer); _scanTimer = setTimeout(_scanThumbs, 600); }
+    else if (!missing) _scanTries = 0;
+  }
+  function _thumbIcon(id, count, size) {
+    _wantThumb(id);
+    var u = _thumbCache[id];
+    var html = '<div class="osm-thumb"><div class="osm-thumb-img" data-pid="' + id + '"' +
+               (u ? ' data-ok="1" style="background-image:url(&quot;' + _cssUrl(u) + '&quot;)"' : '') + '></div>' +
+               (count > 1 ? '<span class="osm-thumb-n">' + count + '</span>' : '') + '</div>';
+    return L.divIcon({ html: html, className: 'osm-thumb-wrap', iconSize: [size, size + 9], iconAnchor: [size / 2, size + 9] });
+  }
+  // Icône d'une photo isolée : créée seulement quand le marqueur est réellement affiché (évite de réclamer 16 000 miniatures)
+  var _LazyThumb = null;
+  function _lazyThumbIcon(id) {
+    if (!_LazyThumb) {
+      _LazyThumb = L.Icon.extend({
+        options: { iconSize: [46, 55], iconAnchor: [23, 55], popupAnchor: [0, -52] },
+        createIcon: function (old) { return _thumbIcon(this.options.pid, 1, 46).createIcon(old); },
+        createShadow: function () { return null; }
+      });
+    }
+    return new _LazyThumb({ pid: id });
+  }
+  function _thumbClusterIcon(cluster) {
+    var n = cluster.getChildCount();
+    var kids = cluster.getAllChildMarkers();
+    var rep = kids.length && kids[0]._osmPhoto ? kids[0]._osmPhoto.id : 0;
+    var size = n >= 1000 ? 92 : (n >= 100 ? 78 : (n >= 10 ? 66 : 56));
+    return _thumbIcon(rep, n, size);
+  }
+  function _toggleThumbs() {
+    thumbsMode = !thumbsMode;
+    try { window.localStorage.setItem('osmme_thumbs', thumbsMode ? '1' : '0'); } catch (e) {}
+    _syncThumbsButton();
+    if (_lastPhotos) _renderMarkers(_lastPhotos);
+  }
+  function _syncThumbsButton() {
+    var b = document.getElementById('osm-btn-thumbs');
+    if (!b) return;
+    b.classList.toggle('osm-btn-active', thumbsMode);
+    b.setAttribute('aria-pressed', thumbsMode ? 'true' : 'false');
+  }
+
   function _renderMarkers(photos) {
     if (!clusterGroup) return;
+    _lastPhotos = photos;
     clusterGroup.clearLayers();
     if (!photos || !photos.length) { _updateStats(0); return; }
 
@@ -433,7 +584,7 @@ var OSMMap = (function () {
       if (token !== _renderToken) return;  // rendu annulé
       var batch = [];
       photos.slice(idx, idx + CHUNK).forEach(function (p) {
-        var marker = L.marker([p.latitude, p.longitude]);
+        var marker = L.marker([p.latitude, p.longitude], thumbsMode ? { icon: _lazyThumbIcon(p.id) } : undefined);
         marker._osmPhoto = p;
         marker.on('click', function () {
           var self = this;
@@ -484,13 +635,13 @@ var OSMMap = (function () {
     var pageUrl = _getPageUrl(p);
     var html = '<div style="font-size:13px;max-width:230px;">';
     if (p.thumbnail_url) {
-      html += '<a href="' + pageUrl + '">'
+      html += '<a href="' + pageUrl + '" target="_blank" rel="noopener">'
             + '<img src="' + p.thumbnail_url + '" '
             + 'style="width:100%;max-height:130px;object-fit:cover;border-radius:4px;margin-bottom:6px;display:block;" '
             + 'onerror="this.style.display=\'none\'">'
             + '</a>';
     }
-    html += '<a href="' + pageUrl + '" style="font-weight:700;color:#1a73e8;text-decoration:none;font-size:14px;">'
+    html += '<a href="' + pageUrl + '" target="_blank" rel="noopener" style="font-weight:700;color:#1a73e8;text-decoration:none;font-size:14px;">'
           + _esc(p.name) + '</a>';
     if (p.album_name) html += '<div style="color:#555;margin-top:3px;font-size:12px;">&#128193; ' + _esc(p.album_name) + '</div>';
     if (p.date)       html += '<div style="color:#888;font-size:11px;margin-top:2px;">&#128197; ' + p.date + '</div>';
@@ -528,7 +679,8 @@ var OSMMap = (function () {
     if (!toShow.length) {
       var panelList = document.getElementById('osm-panel-list');
       if (panelList) panelList.innerHTML = '<div style="padding:16px;color:#888;font-size:12px;font-style:italic">Aucune photo dans cette zone.<br>Essayez de d\u00e9zoomer ou de changer l\u2019album.</div>';
-      if (countEl) countEl.textContent = '0 photo visible';
+      var countEl0 = document.getElementById('osm-panel-count');
+      if (countEl0) countEl0.textContent = '0 photo visible';
       return;
     }
 
@@ -593,7 +745,7 @@ var OSMMap = (function () {
             + ' data-lat="' + p.latitude + '" data-lon="' + p.longitude + '">';
 
       // Miniature — lien natif sans target="_blank" (compatible Safari localhost)
-      html += '<a href="' + p.page_url + '" class="osm-pi-thumb-link">';
+      html += '<a href="' + p.page_url + '" class="osm-pi-thumb-link" target="_blank" rel="noopener">';
       html += '<div class="osm-pi-thumb">';
       if (p.thumbnail_url) {
         html += '<img src="' + p.thumbnail_url + '" alt="" loading="lazy"'
@@ -604,7 +756,7 @@ var OSMMap = (function () {
       html += '</div></a>';
 
       // Infos — lien natif
-      html += '<a href="' + p.page_url + '" class="osm-pi-info">';
+      html += '<a href="' + p.page_url + '" class="osm-pi-info" target="_blank" rel="noopener">';
       html += '<span class="osm-pi-name">' + _esc(p.name) + '</span>';
       if (p.album_name) html += '<span class="osm-pi-album">&#128193; ' + _esc(p.album_name) + '</span>';
       if (p.date)       html += '<span class="osm-pi-date">&#128197; ' + p.date + '</span>';
@@ -646,7 +798,35 @@ var OSMMap = (function () {
     if (panelOpen) item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  // Sélecteur « Lieux favoris » à côté du choix d'album : centre la carte sur le lieu
+  function _addPlacesSelect() {
+    var list = window.OSM_FAV_PLACES;
+    if (!list || !list.length || document.getElementById('osm-places-filter')) return;
+    var wrap = document.createElement('span');
+    wrap.className = 'osm-fav-places';
+    wrap.style.cssText = 'white-space:nowrap;';
+    var lab = document.createElement('label');
+    lab.setAttribute('for', 'osm-places-filter');
+    lab.innerHTML = '&nbsp;&#11088; Lieux favoris&nbsp;:&nbsp;';
+    var sel = document.createElement('select');
+    sel.id = 'osm-places-filter';
+    sel.style.maxWidth = '200px';
+    var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '\u2014 Choisir \u2014'; sel.appendChild(o0);
+    list.forEach(function (p, i) { var o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+    sel.addEventListener('change', function () {
+      var p = list[this.value];
+      if (p && map) { map.setView([p.lat, p.lon], 14); }
+    });
+    wrap.appendChild(lab); wrap.appendChild(sel);
+    var album = document.getElementById('osm-album-filter');
+    if (album && album.parentNode) { album.parentNode.insertBefore(wrap, album.nextSibling); return; }
+    var anchor = document.getElementById('osm-btn-panel');
+    if (anchor && anchor.parentNode) { anchor.parentNode.insertBefore(wrap, anchor); }
+  }
+
   function _bindControls() {
+    _addPlacesSelect();
+    _addSlideshowButton();
     var sel = document.getElementById('osm-album-filter');
     if (sel) {
       sel.addEventListener('change', function () {
