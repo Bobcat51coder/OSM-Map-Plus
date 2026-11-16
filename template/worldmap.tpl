@@ -1,1 +1,0 @@
-{$OSM_WORLDMAP_HTML}

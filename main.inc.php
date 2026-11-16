@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.0.8
+Version: 1.0.8.1
 Description: Carte OpenStreetMap pour Piwigo : clustering, géocodeur, filtres par album, choix de fonds de carte (OpenFreeMap, satellite + noms, OSM France…), vue 3D, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1073
 Author: Bobcat-Fr
@@ -35,7 +35,7 @@ Has Settings: true
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // --- Définition du plugin ---
 define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
-define('OSM_MAP_VERSION', '1.0.8');
+define('OSM_MAP_VERSION', '1.0.8.1');
 // Paramètre anti-cache des fichiers JS/CSS (change à chaque mise à jour des fichiers)
 define('OSM_MAP_ASSET_V', OSM_MAP_VERSION . '.' . (int)@filemtime(__FILE__));
 
@@ -542,18 +542,62 @@ function osmme_add_menu_entry() {
     if ($user['status'] === 'guest') return;
     $url = get_root_url() . 'plugins/osm_map/osmmap_plus.php';
     $selected = isset($_GET['osm_worldmap']) ? 'true' : 'false';
-    // Injecter via JS pour éviter les problèmes de hooks
-    $menu_link = htmlspecialchars($url, ENT_QUOTES);
-    $js = "document.addEventListener('DOMContentLoaded',function(){";
-    $js .= "var mn=null;";
-    $js .= "var lists=document.querySelectorAll('dd ul');";
-    $js .= "for(var i=0;i<lists.length;i++){";
-    $js .= "if(lists[i].querySelector('a[href*=search],a[href*=about],a[href*=recent]')){mn=lists[i];break;}}";
-    $js .= "if(!mn&&lists.length)mn=lists[lists.length-1];";
-    $js .= "if(!mn)return;";
-    $js .= "var li=document.createElement('li');";
-    $inner = '<a href="' . $menu_link . '">&#127760; OSM Map Plus</a>';
-    $js .= "li.innerHTML=" . json_encode($inner) . ";";
-    $js .= "mn.appendChild(li);});";
+    // Injecté via JS (menus très différents selon les thèmes : modus/default = « dd ul », Bootstrap = menu déroulant « Explorer »)
+    $inner = '&#127760; OSM Map Plus';
+    $js = <<<'JSEOF'
+document.addEventListener('DOMContentLoaded', function () {
+  var href = __HREF__, label = __LABEL__;
+  if (document.querySelector('a[data-osmme-menu]')) return;
+  function mk(tag, cls, inner) { var e = document.createElement(tag); if (cls) e.className = cls; e.innerHTML = inner; return e; }
+  var keys = 'a[href*="search.php"],a[href*="about.php"],a[href*="tags.php"],a[href*="random.php"],a[href*="comments.php"],a[href*="notification.php"],a[href*="/most_visited"],a[href*="/recent_pics"],a[href*="/recent_cats"],a[href*="/favorites"],a[href*="calendar"]';
+
+  // 1) Thèmes classiques (modus, default, elegant…) : liste « dd ul » du menu
+  var lists = document.querySelectorAll('dd ul'), mn = null, i;
+  for (i = 0; i < lists.length; i++) {
+    if (lists[i].querySelector('a[href*=search],a[href*=about],a[href*=recent]')) { mn = lists[i]; break; }
+  }
+  if (mn) {
+    var li = mk('li', '', '<a href="' + href + '" data-osmme-menu="1">' + label + '</a>');
+    mn.appendChild(li);
+    return;
+  }
+
+  // 2) Thèmes Bootstrap (Bootstrap Darkroom, Bootstrap Default…) : menu déroulant « Explorer »
+  var drops = document.querySelectorAll('.navbar .dropdown-menu, nav .dropdown-menu, .dropdown-menu'), best = null, bestN = 0;
+  // a) menu dont le titre est « Découvrir / Explorer / Explore / Discover »
+  for (i = 0; i < drops.length && !best; i++) {
+    var tg = drops[i].parentNode && drops[i].parentNode.querySelector('.dropdown-toggle');
+    if (tg && /d[e\u00e9]couvrir|explor|discover/i.test(tg.textContent)) { best = drops[i]; }
+  }
+  // b) sinon le menu qui contient le plus de liens « de navigation » (recherche, à propos, favoris, au hasard…)
+  if (!best) {
+    for (i = 0; i < drops.length; i++) {
+      var n = drops[i].querySelectorAll(keys).length;
+      if (n > bestN) { best = drops[i]; bestN = n; }
+    }
+    if (bestN < 3) { best = null; }
+  }
+  if (best) {
+    var sample = best.querySelector('a.dropdown-item') || best.querySelector('a');
+    var isList = best.tagName === 'UL' || best.tagName === 'OL';
+    var a = mk('a', sample ? sample.className : 'dropdown-item', label);
+    a.href = href; a.setAttribute('data-osmme-menu', '1');
+    if (isList) { var l2 = mk('li', '', ''); l2.appendChild(a); best.appendChild(l2); }
+    else { best.appendChild(a); }
+    return;
+  }
+
+  // 3) Dernier recours : entrée dans la barre de navigation Bootstrap
+  var nav = document.querySelector('.navbar-nav');
+  if (nav) {
+    var item = mk('li', 'nav-item', '<a class="nav-link" href="' + href + '" data-osmme-menu="1">' + label + '</a>');
+    nav.appendChild(item);
+    return;
+  }
+  // 4) Aucun menu reconnu : dernière liste « dd ul » si elle existe
+  if (lists.length) { lists[lists.length - 1].appendChild(mk('li', '', '<a href="' + href + '" data-osmme-menu="1">' + label + '</a>')); }
+});
+JSEOF;
+    $js = str_replace(array('__HREF__', '__LABEL__'), array(json_encode($url), json_encode($inner)), $js);
     $template->append('head_elements', '<script>' . $js . '</script>');
 }
