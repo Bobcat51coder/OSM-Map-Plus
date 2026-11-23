@@ -16,3 +16,5 @@ $lang['Loading...']         = 'Loading…';
 $lang['Recentrer'] = 'Fit';
 $lang['Liste'] = 'List';
 $lang['Créer album'] = 'Create album';
+$lang['Photo location'] = 'Photo location';
+$lang['View in OpenStreetMap'] = 'View in OpenStreetMap';

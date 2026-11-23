@@ -86,7 +86,7 @@ $photos_script = '<script>'
     . 'window.OSM_FAV_PLACES=' . (function() {
           try {
               if (!function_exists('is_admin') || !is_admin()) { return '[]'; }   // lieux favoris : administrateurs uniquement
-              include_once(dirname(__FILE__) . '/include/places.inc.php'); return json_encode(osmme_pl_list());
+              include_once(dirname(__FILE__) . '/include/places.inc.php'); return osmme_js(osmme_pl_list());
           }
           catch (Throwable $e) { return '[]'; }
       })() . ';'
@@ -94,7 +94,7 @@ $photos_script = '<script>'
     . 'window.OSM_PHOTO_URL="' . $root . 'plugins/osm_map/osmme-photo.php";'
     . 'window.OSM_API_URL=\'' . $api_url . '\';'
     . 'window.OSM_IS_ADMIN=' . $is_admin . ';'
-    . 'window.OSM_CARTO_API_KEY=' . json_encode(isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '') . ';'
+    . 'window.OSM_CARTO_API_KEY=' . osmme_js(isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '') . ';'
     . '</script>';
 
 $template->set_filename('osmmap_plus', dirname(__FILE__) . '/template/osmmap_plus.tpl');
@@ -109,7 +109,7 @@ $template->assign(array(
     'OSM_API_URL'     => $api_url,
     'OSM_MAP_HEIGHT'  => isset($conf['osm_map_plus_height']) ? (int)$conf['osm_map_plus_height'] : 600,
     'OSM_ALBUMS'      => $albums,
-    'TILES_JSON'      => json_encode($tiles),
+    'TILES_JSON'      => osmme_js($tiles),
     'OSM_MAP_VERSION' => OSM_MAP_ASSET_V,
     'OSM_TILE'        => isset($conf['osm_map_tile']) ? $conf['osm_map_tile'] : 'carto_voyager',
     'OSM_INIT_ZOOM'   => isset($conf['osm_map_zoom'])  ? (int)$conf['osm_map_zoom']  : 5,

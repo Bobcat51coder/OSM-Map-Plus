@@ -5,6 +5,7 @@
  */
 if (!defined('PHPWG_ROOT_PATH')) die('Hacking attempt!');
 check_status(ACCESS_ADMINISTRATOR);
+include_once(dirname(__FILE__) . '/../include/admin_tabs.inc.php');
 global $template;
 include_once(dirname(__FILE__) . '/../include/exif_gps.inc.php');
 foreach (array('include/derivative_params.inc.php','include/derivative_std_params.inc.php','include/functions_picture.inc.php') as $f_inc) {
@@ -121,7 +122,7 @@ $html = '
 .osm-ng-pager strong { background:#1a73e8; color:#fff; border-color:#1a73e8; }
 </style>
 <div id="osm-ng">
-  <p><a href="' . $root . 'admin.php?page=plugin-osm_map">&larr; Retour aux paramètres d\'OSM Map Plus</a></p>
+  ' . osmme_admin_tabs('no_gps') . '
   <h3>&#128205; Photos sans position GPS en base</h3>
   <p><strong>' . $total . '</strong> photo(s) sans GPS' . ($album > 0 ? ' dans cet album' : '') . ' sur ' . $all . ' au total. Cliquez une vignette pour ouvrir son éditeur de position (nouvel onglet).'
   . ($exif_ext ? ' Le repère &laquo;&nbsp;GPS dans le fichier&nbsp;&raquo; signale une photo dont le fichier contient déjà une position (voir l\'audit &laquo;&nbsp;Écarts GPS / EXIF&nbsp;&raquo;).' : '') . '</p>

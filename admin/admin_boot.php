@@ -23,7 +23,14 @@ defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // Hook batch manager mode unitaire
 add_event_handler('loc_end_element_set_unit', 'osmme_loc_end_element_set_unit');
 
-// Injection Leaflet sur batch_manager?mode=unit
+// Hook batch manager mode global : action « OSM Map Plus » (carte + recherche pour la sélection)
+add_event_handler('loc_end_element_set_global', 'osmme_loc_end_element_set_global');
+add_event_handler('element_set_global_action', 'osmme_element_set_global_action', EVENT_HANDLER_PRIORITY_NEUTRAL, 2);
+
+// Page « Propriétés » d'un album : option d'affichage de la carte (prend la main sur le réglage général)
+add_event_handler('loc_begin_cat_modify', 'osmme_cat_modify');
+
+// Injection Leaflet sur batch_manager (modes unit et global)
 add_event_handler('loc_end_page_header', 'osmme_inject_leaflet_admin');
 
 // Onglet OpenStreetMap sur la page d'édition photo

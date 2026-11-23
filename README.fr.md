@@ -24,9 +24,32 @@ Licence : [GNU GPL-2.0](LICENSE) — Compatible tous thèmes.
 
 **Géotaggage (administration)**
 - Mode unitaire de la gestion par lot : carte, recherche de lieu, boutons Copier / Coller les coordonnées
+- Mode global de la gestion par lot : action « OSM Map Plus » (grande carte, recherche, lieux favoris, fonds) pour géotagger toute la sélection d’un coup
 - Onglet « OSM Map Plus » sur la fiche d'édition d'une photo : carte, recherche, enregistrement ou effacement du GPS
 - Mêmes fonds de carte que la galerie (menu « Fond » sur chaque carte)
 - Menu « Lieux favoris », comparaison avec le GPS des fichiers, audit de la galerie : voir « Outils GPS / EXIF »
+
+## Ce que OSM Map Plus apporte en plus de piwigo-openstreetmap
+
+OSM Map Plus peut être utilisé seul ou à côté de `piwigo-openstreetmap` (voir « Masquer si OSM natif actif » et « Position de la carte »). Comparaison établie d'après la [fiche PEM de piwigo-openstreetmap](https://piwigo.org/ext/extension_view.php?eid=701) (révision 16.b) et des essais côte à côte.
+
+| | piwigo-openstreetmap | OSM Map Plus |
+|---|---|---|
+| Carte de la galerie | Carte du monde (menu, albums) | Carte avec **clustering AJAX** (dizaines de milliers de photos), filtre par album, géocodeur, panneau liste synchronisé |
+| Mode « Vignettes » | — | **Oui** : groupes et photos isolées en miniatures avec leur nombre |
+| Diaporama de la zone visible | — | **Oui**, plein écran, avec mini-carte |
+| Créer un album depuis la carte | — | **Oui** (administrateurs) |
+| Fonds de carte | Mapnik, OSM, serveurs de tuiles personnalisés | Carto Voyager, OSM, **OSM France**, **OpenFreeMap (vectoriel)**, Satellite, **Satellite + noms**, Topographique ; choix mémorisé par visiteur |
+| Vue 3D en relief | — | **Oui** (bouton « 3D » sur toutes les cartes) |
+| Position de la carte | Fixe | **En haut / en bas / pas d'affichage**, réglage général **et par album** (page Propriétés) |
+| Petite carte de la page photo | Panneau de droite | Panneau « Information » avec **vignette de la photo** comme repère, fonds au choix, bouton 3D |
+| Géotaggage par lot | Action « OSM GeoTag » (petite carte) | Action **« OSM Map Plus »** : grande carte, **recherche de lieu**, lieux favoris, Copier/Coller, fonds de carte, option « effacer le GPS » |
+| Géotaggage unitaire | Carte + recherche | Carte + recherche + **lieux favoris** + Copier/Coller + « Lieu favori » en un clic |
+| Lieux favoris | Liste de lieux enregistrés | **Page de gestion** (ajout, édition, carte, hiérarchie), **export/import JSON**, sauvegarde automatique, **import des lieux de piwigo-openstreetmap** |
+| Contrôle des positions | — | **Comparaison base / GPS EXIF** du fichier, page d'audit « Écarts GPS / EXIF », page « Photos sans GPS » |
+| Piwigo 16 | Oui | Oui (page Propriétés d'album adaptée) |
+
+**Là où piwigo-openstreetmap reste devant :** traces GPX, réglages de repères et de popups, serveurs de tuiles personnalisés et traductions en 31 langues (l'interface d'OSM Map Plus est en français ; l'anglais n'est que partiel pour l'instant).
 
 ## Prérequis
 
@@ -126,6 +149,8 @@ Code généré par [Claude](https://claude.ai) (Anthropic) via une session de d�
 GNU GPL-2.0 ou ultérieure — voir le fichier [LICENSE](LICENSE).
 
 ## Changelog
+- **1.1.0** — Gestion par lot (mode global) : nouvelle action **« OSM Map Plus »** avec grande carte, recherche de lieu, lieux favoris, choix du fond, Copier/Coller et option « Effacer le GPS » ; la position choisie est appliquée à toutes les photos sélectionnées (enregistrement assuré par le plugin lui-même), bouton « Lieu favori » (mode unitaire et par lot) et barre d’onglets commune aux pages d’administration : Paramètres, Lieux favoris, Photos sans GPS, Écarts GPS / EXIF. Page photo : la petite carte s’intègre au panneau « Information » du thème, avec la vignette de la photo comme repère (repli en bas de page si le panneau n’est pas trouvé). Nouveau réglage « Position de la carte de la galerie » (haut/bas) ; si piwigo-openstreetmap est actif, nos cartes restent en bas de page. Carte de la galerie : option « Pas d’affichage » et réglage par album dans la page « Propriétés » de l’album, qui prend la main sur le réglage général. Propriétés d’un album : compatible Piwigo 16 (page en AJAX, le choix est enregistré dès qu’il change). Lieux favoris : import plus robuste depuis piwigo-openstreetmap (table <préfixe>osm_places détectée, nombre de lieux affiché sur le bouton). Page Lieux favoris : bloc « Sauvegarde et import » placé en haut. Page photo : correction de la carte écrasée avec le thème Modus (placée avant la liste d’infos, avec repli sous la photo si le panneau est trop étroit). Paramètres : nouvelle section « Affichage de la carte par album » listant les albums avec réglage propre (haut/bas/masqué, modifiable sur place, avec ajout d’un album). Durcissement sécurité : jetons CSRF stricts, JSON échappé dans les blocs <script>, échappement des valeurs dans les panneaux de la carte.
+- **1.0.8.2** — Correction : liens et vignettes des photos (clic sur la carte, mode « Vignettes », audit EXIF) quand Piwigo est installé dans un sous-dossier (`https://site/piwigo/`) : les adresses renvoyées sont maintenant absolues (merci à [Charles-69](https://github.com/Charles-69)).
 - **1.0.8.1** — Accès par le menu découvrir sur le thème Bootstrap
 - **1.0.8** — Édition d'une photo : comparaison de la position en base avec le GPS EXIF du fichier (JPEG, lecture seule) : bandeau d'alerte avec l'écart, seconde carte « fichier », bouton « Utiliser la position du fichier ». Alerte d'écart en gestion par lot, page d'audit « Écarts GPS / EXIF » et page « Photos sans GPS » (liste paginée) de toute la galerie, validation des écarts et lieux favoris (tables propres + sauvegarde dans `_data`). Nouveau bouton « Diaporama » (diaporama plein écran des photos de la zone visible, nouvel onglet). Bouton « Vignettes » : groupes de photos et photos isolées affichés en miniatures avec leur nombre (comme dans Apple Photos). Le panneau liste suit désormais le zoom et le déplacement de la carte, avec des miniatures plus larges (96×72) ; les liens des photos s'ouvrent dans un nouvel onglet. Vue 3D : les photos prises au même endroit restent groupées avec leur nombre, et un clic liste toutes les photos du groupe. L'entrée de menu « OSM Map Plus » est aussi ajoutée au menu déroulant « Explorer » des thèmes Bootstrap. Correction : la page « OSM Map Plus » chargeait un ancien fichier de style en cache ; erreur « countEl is not defined » en zoomant sur une zone sans photo.
 - **1.0.7** — Menu « Fond » sur la carte de la galerie et sur les cartes de géotaggage : ajout d'OpenStreetMap France, OpenFreeMap et Satellite + noms. Bouton « 3D » (vue en relief dans un nouvel onglet). La vue 3D propose une case « Globe » : la Terre en sphère zoomable avec atmosphère (MapLibre GL JS 5). Dans l'administration, si un autre plugin impose un ancien Leaflet (< 1.0), OpenFreeMap n'est pas proposé et « Satellite + noms » passe en version raster Esri. Les paramètres proposent la même liste de fonds pour la galerie et le géotaggage. Compatibilité avec `piwigo-openstreetmap` (une seule instance de Leaflet sur la page). Conformité aux recommandations Piwigo : fichiers `index.php`, `maintain.class.php` (installation, mise à jour, désinstallation propre des réglages), fichiers de langue chargés, dossier `en_UK`. Cartes de géotaggage et mini-carte des pages photo plus robustes (recalcul de taille, bascule automatique sur OpenStreetMap si le fond ne répond pas). Correction d'un blocage de la page galerie lorsque le fond par défaut était OpenFreeMap ou Satellite + noms. Marges latérales et zoom à la molette après clic sur les cartes. Création d'album réservée aux administrateurs.

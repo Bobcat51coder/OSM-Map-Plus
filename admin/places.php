@@ -5,6 +5,7 @@
  */
 if (!defined('PHPWG_ROOT_PATH')) die('Hacking attempt!');
 check_status(ACCESS_ADMINISTRATOR);
+include_once(dirname(__FILE__) . '/../include/admin_tabs.inc.php');
 global $template;
 include_once(dirname(__FILE__) . '/../include/places.inc.php');
 
@@ -12,7 +13,9 @@ $root   = get_root_url();
 $ep     = $root . 'plugins/osm_map/osmme-places.php';
 $token  = get_pwg_token();
 $places = osmme_pl_list();
-$has_osm = (bool)osmme_pl_osm_table();
+$osm_tbl = osmme_pl_osm_table();
+$has_osm = (bool)$osm_tbl;
+$osm_n   = $has_osm ? osmme_pl_osm_count() : 0;
 
 $template->append('head_elements',
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />' . "\n" .
@@ -34,9 +37,23 @@ $html = '
 #osm-pl .box { border:1px solid #d0d0d0; border-radius:4px; padding:10px 14px; margin:14px 0; background:#fafafa; }
 </style>
 <div id="osm-pl">
-  <p><a href="' . $root . 'admin.php?page=plugin-osm_map">&larr; Retour aux paramètres d\'OSM Map Plus</a></p>
+  ' . osmme_admin_tabs('places') . '
   <h3>&#11088; Lieux favoris</h3>
   <p>Ces lieux apparaissent dans le menu « Lieux favoris » de l\'onglet d\'édition d\'une photo et de la gestion par lot : un choix remplit les coordonnées et recentre la carte. Vous pouvez aussi enregistrer la position du marqueur depuis l\'onglet d\'édition (bouton « Enregistrer ce lieu »).</p>
+
+  <div class="box">
+    <strong>Sauvegarde et import</strong>
+    <div class="bar">
+      <span>Sauvegarde automatique : <code>_data/osm_map_places.json</code> (rechargée à la réinstallation du plugin).</span>
+    </div>
+    <div class="bar">
+      <a href="' . $ep . '?export=1">&#11015; Exporter (JSON)</a>
+      <label>&#11014; Importer (JSON) : <input type="file" id="pl-imp" accept=".json,application/json"></label>'
+      . ($has_osm ? '<button type="button" id="pl-osm" title="Table : ' . htmlspecialchars($osm_tbl) . '">&#11014; Importer les lieux de piwigo-openstreetmap (' . (int)$osm_n . ')</button>' : '') . '
+      <span id="pl-msg2"></span>
+    </div>'
+    . ($has_osm ? '' : '<div style="font-size:0.85rem;color:#666;">La table des lieux de piwigo-openstreetmap (<code>&lt;préfixe&gt;osm_places</code>) n\'a pas été trouvée : pas d\'import possible depuis ce plugin.</div>') . '
+  </div>
 
   <div class="box">
     <strong>Ajouter un lieu</strong>
@@ -64,23 +81,10 @@ $html = '
     <div class="map" id="pl-map-all" style="height:420px;"></div>
   </div>
 
-  <div class="box">
-    <strong>Sauvegarde et import</strong>
-    <div class="bar">
-      <span>Sauvegarde automatique : <code>_data/osm_map_places.json</code> (rechargée à la réinstallation du plugin).</span>
-    </div>
-    <div class="bar">
-      <a href="' . $ep . '?export=1">&#11015; Exporter (JSON)</a>
-      <label>&#11014; Importer (JSON) : <input type="file" id="pl-imp" accept=".json,application/json"></label>'
-      . ($has_osm ? '<button type="button" id="pl-osm">Importer les lieux de piwigo-openstreetmap</button>' : '') . '
-      <span id="pl-msg2"></span>
-    </div>'
-    . ($has_osm ? '' : '<div style="font-size:0.85rem;color:#666;">La table des lieux de piwigo-openstreetmap n\'a pas été trouvée : pas d\'import possible depuis ce plugin.</div>') . '
-  </div>
 </div>
 <script>
 (function() {
-  var EP = ' . json_encode($ep) . ', TOKEN = ' . json_encode($token) . ', places = ' . json_encode($places) . ';
+  var EP = ' . osmme_js($ep) . ', TOKEN = ' . osmme_js($token) . ', places = ' . osmme_js($places) . ';
   var $ = function(i) { return document.getElementById(i); };
   function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
   function post(data, file) {

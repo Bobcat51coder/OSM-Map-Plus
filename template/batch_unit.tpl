@@ -21,6 +21,8 @@
       style="padding:5px 10px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;">&#128269;</button>
     <select id="osmme-places-{$element.ID}" title="Lieux favoris"
       style="padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;max-width:180px;"><option value="">&#11088; Lieux favoris</option></select>
+    <button type="button" id="osmme-fav-btn-{$element.ID}" title="Enregistrer la position du marqueur comme lieu favori"
+      style="padding:5px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#11088; Lieu favori</button>
     <select id="osmme-basemap-{$element.ID}" title="Fond de carte"
       style="padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;"></select>
     <button type="button" id="osmme-3d-btn-{$element.ID}" title="Ouvrir la carte en relief 3D dans un nouvel onglet"
@@ -136,13 +138,39 @@ var osmUnitData_{$element.ID} = {
   window['osmmePlace_' + imageID] = function(lat, lon) { placeMarker(lat, lon); };
 
   (function() {
-    var sel = document.getElementById('osmme-places-' + imageID), list = window.OSM_PLACES || [];
+    var sel = document.getElementById('osmme-places-' + imageID), list = window.OSM_PLACES = window.OSM_PLACES || [];
+    var fav = document.getElementById('osmme-fav-btn-' + imageID);
     if (!sel) return;
-    if (!list.length) { sel.style.display = 'none'; return; }
-    list.forEach(function(p, i) { var o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+    function fill() {
+      while (sel.options.length > 1) sel.remove(1);
+      list.forEach(function(p, i) { var o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+      sel.style.display = list.length ? '' : 'none';
+    }
+    fill();
     sel.addEventListener('change', function() {
       var p = list[sel.value];
-      if (p) { placeMarker(p.lat, p.lon); }
+      if (p) { placeMarker(parseFloat(p.lat), parseFloat(p.lon)); }
+    });
+    // Rafraîchit le menu de cette photo quand un lieu est ajouté depuis une autre carte de la page
+    document.addEventListener('osmme-places-updated', function() { var v = sel.value; fill(); sel.value = v; });
+    if (fav) fav.addEventListener('click', function() {
+      var la = document.getElementById('osmme-lat-' + imageID).value, lo = document.getElementById('osmme-lon-' + imageID).value;
+      if (!la || !lo) { alert('Placez d\u2019abord un marqueur sur la carte.'); return; }
+      var name = prompt('Nom du lieu favori :', document.getElementById('osmme-search-' + imageID).value || '');
+      if (!name || !name.trim()) return;
+      var ep = window.OSM_BATCH_ROOT + 'plugins/osm_map/osmme-places.php';
+      var fd = new FormData();
+      fd.append('add', '1'); fd.append('pwg_token', window.OSM_BATCH_TOKEN || ''); fd.append('name', name); fd.append('lat', la); fd.append('lon', lo);
+      fetch(ep, {method: 'POST', body: fd, credentials: 'same-origin'}).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) { alert('Lieu invalide.'); return; }
+        return fetch(ep + '?list=1', {credentials: 'same-origin'}).then(function(r) { return r.json(); }).then(function(l) {
+          list.length = 0;
+          (l.places || []).forEach(function(p) { list.push(p); });
+          document.dispatchEvent(new Event('osmme-places-updated'));
+          for (var i = 0; i < list.length; i++) { if (list[i].id === d.id) { sel.value = i; break; } }
+          flashBtn(fav, '\u2713 Enregistr\u00e9 !');
+        });
+      }).catch(function() { alert('Erreur r\u00e9seau.'); });
     });
   })();
 

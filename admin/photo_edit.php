@@ -118,7 +118,7 @@ $plg  = $root . 'plugins/osm_map/';
 global $template;
 $template->append('head_elements',
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />' . "\n" .
-    '<script>window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';</script>' .
+    '<script>window.OSM_CARTO_API_KEY=' . osmme_js(osmme_resolve_carto_key()) . ';</script>' .
     '<script src="' . get_root_url() . 'plugins/osm_map/js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>' .
     '<script>' . osmme_loader_js() . '</script>'
 );
@@ -259,14 +259,14 @@ $html .= '
 var OSM_EDIT_LAT  = ' . $init_lat . ';
 var OSM_EDIT_LON  = ' . $init_lon . ';
 var OSM_EDIT_ZOOM = ' . $init_zoom . ';
-var OSM_EDIT_ROOT = ' . json_encode($root) . ';
-var OSM_EXIF = ' . json_encode($exif_gps) . ';
-var OSM_PLACES = ' . json_encode($osm_places) . ';
-var OSM_PLACES_EP = ' . json_encode($root . 'plugins/osm_map/osmme-places.php') . ';
-var OSM_VALID_EP = ' . json_encode($root . 'plugins/osm_map/osmme-exifcheck.php') . ';
-var OSM_VALID_TOKEN = ' . json_encode(get_pwg_token()) . ';
+var OSM_EDIT_ROOT = ' . osmme_js($root) . ';
+var OSM_EXIF = ' . osmme_js($exif_gps) . ';
+var OSM_PLACES = ' . osmme_js($osm_places) . ';
+var OSM_PLACES_EP = ' . osmme_js($root . 'plugins/osm_map/osmme-places.php') . ';
+var OSM_VALID_EP = ' . osmme_js($root . 'plugins/osm_map/osmme-exifcheck.php') . ';
+var OSM_VALID_TOKEN = ' . osmme_js(get_pwg_token()) . ';
 var OSM_EDIT_ID = ' . (int)$image_id . ';
-var OSM_EDIT_TILE_KEY = ' . json_encode($tile_geotag) . ';
+var OSM_EDIT_TILE_KEY = ' . osmme_js($tile_geotag) . ';
 var OSM_EDIT_TILE = {url: "' . $t[0] . '", attr: "' . $t[1] . '", maxZoom: ' . $t[2] . '};
 </script>
 <script>

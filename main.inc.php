@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.0.8.1
-Description: Carte OpenStreetMap pour Piwigo : clustering, géocodeur, filtres par album, choix de fonds de carte (OpenFreeMap, satellite + noms, OSM France…), vue 3D, panneau liste et création d'album depuis la carte. Compatible tous thèmes.
+Version: 1.1.0
+Description: Carte OpenStreetMap pour Piwigo : clustering, 7 fonds de carte, vue 3D, vignettes, diaporama, géotaggage par lot et unitaire, lieux favoris, audit GPS/EXIF, affichage haut/bas/masqué par album. Compatible tous thèmes.
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1073
 Author: Bobcat-Fr
 Author URI: 
@@ -35,7 +35,7 @@ Has Settings: true
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // --- Définition du plugin ---
 define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
-define('OSM_MAP_VERSION', '1.0.8.1');
+define('OSM_MAP_VERSION', '1.1.0');
 // Paramètre anti-cache des fichiers JS/CSS (change à chaque mise à jour des fichiers)
 define('OSM_MAP_ASSET_V', OSM_MAP_VERSION . '.' . (int)@filemtime(__FILE__));
 
@@ -68,6 +68,7 @@ function osmme_init_conf() {
         'osm_map_tile_photo'  => 'carto_voyager',
         'osm_map_photo_height' => '220',
         'osm_map_hide_if_osm' => '0',
+        'osm_map_position'    => 'bottom',
         'osm_map_carto_api_key' => '',
     );
     foreach ($defaults as $key => $val) {
@@ -160,7 +161,7 @@ function osmme_inject_assets() {
     // Clé API CartoDB (basemaps.cartocdn.com), lue par map.js / geotag.js
     $carto_key = osmme_resolve_carto_key();
     $template->append('head_elements',
-        '<script>window.OSM_CARTO_API_KEY=' . json_encode($carto_key) . ';</script>'
+        '<script>window.OSM_CARTO_API_KEY=' . osmme_js($carto_key) . ';</script>'
     );
     // jsDelivr = CDN plus rapide et fiable qu'unpkg pour les assets Leaflet
     $template->append('head_elements',
@@ -224,6 +225,49 @@ function osmme_build_thumb_url($row, $root) {
     }
 }
 
+// JSON sûr pour être inséré dans un bloc <script> : « < > & \' " » sont échappés, donc un nom de lieu ou
+// une valeur contenant « </script> » ne peut pas sortir du script (XSS)
+function osmme_js($v) {
+    return json_encode($v, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+}
+
+// piwigo-openstreetmap est-il actif ? (dans ce cas notre carte reste en bas de page)
+function osmme_native_osm_active() {
+    global $pwg_loaded_plugins;
+    return isset($pwg_loaded_plugins['piwigo-openstreetmap']);
+}
+
+// JS : déplace la carte en haut du contenu de la page (repli : reste en bas si aucun conteneur reconnu)
+function osmme_move_to_top_js() {
+    return '(function(){var w=document.getElementById("osm-map-container");if(!w)return;'
+        . 'var s=["#content","#main-content","main",".content"],h=null,i;'
+        . 'for(i=0;i<s.length&&!h;i++){h=document.querySelector(s[i]);}'
+        . 'if(h&&!h.contains(w)){h.insertBefore(w,h.firstChild);w.style.marginTop="10px";}})();';
+}
+
+// Positions possibles de la grande carte : en haut, en bas, ou pas d'affichage
+function osmme_valid_pos($v) { return in_array($v, array('top', 'bottom', 'none'), true); }
+
+// Réglages par album (JSON {id_album: position}) ; absent = suit le réglage général
+function osmme_album_positions() {
+    global $conf;
+    $j = json_decode(isset($conf['osm_map_album_pos']) ? $conf['osm_map_album_pos'] : '{}', true);
+    return is_array($j) ? $j : array();
+}
+
+// Position effective de la grande carte pour un album : le réglage de l'album l'emporte sur le réglage
+// général ; « en haut » devient « en bas » si piwigo-openstreetmap est actif (il affiche déjà sa carte en haut).
+function osmme_map_position($cat_id = 0) {
+    global $conf;
+    $pos = (isset($conf['osm_map_position']) && osmme_valid_pos($conf['osm_map_position'])) ? $conf['osm_map_position'] : 'bottom';
+    if ($cat_id > 0) {
+        $a = osmme_album_positions();
+        if (isset($a[$cat_id]) && osmme_valid_pos($a[$cat_id])) $pos = $a[$cat_id];
+    }
+    if ($pos === 'top' && osmme_native_osm_active()) $pos = 'bottom';
+    return $pos;
+}
+
 function osmme_inject_map_block() {
     if (defined('OSMME_WORLDMAP_PAGE')) return;
     global $template, $conf, $page, $pwg_loaded_plugins;
@@ -241,6 +285,11 @@ function osmme_inject_map_block() {
     if (!in_array($section, array('categories', 'category', 'flat', ''))) {
         return;
     }
+
+    // Position (ou absence d'affichage) : réglage de l'album, sinon réglage général
+    $osmme_cat = !empty($page['category']['id']) ? (int)$page['category']['id'] : 0;
+    $osmme_pos = osmme_map_position($osmme_cat);
+    if ($osmme_pos === 'none') return;
 
     $root   = get_root_url();
     $height = isset($conf['osm_map_height']) ? (int)$conf['osm_map_height'] : 500;
@@ -396,7 +445,7 @@ function osmme_inject_map_block() {
         . '</div>'
 
         . '<script>'
-        . 'window.OSM_FAV_PLACES=' . json_encode((function_exists('is_admin') && is_admin()) ? osmme_places_for_batch() : array()) . ';'
+        . 'window.OSM_FAV_PLACES=' . osmme_js((function_exists('is_admin') && is_admin()) ? osmme_places_for_batch() : array()) . ';'
         . 'window.OSM_POINTS_URL="' . $root . 'plugins/osm_map/osmme-points.php' . ($cat_id > 0 ? '?cat_id=' . $cat_id : '') . '";'
         . 'window.OSM_PHOTO_URL="' . $root . 'plugins/osm_map/osmme-photo.php";'
         . 'window.OSM_ROOT="' . $root . '";'
@@ -405,6 +454,7 @@ function osmme_inject_map_block() {
         . '</script>'
         . '<script src="' . $js_url . '"></script>'
         . '<script>document.addEventListener("DOMContentLoaded",function(){'
+        . ($osmme_pos === 'top' ? osmme_move_to_top_js() : '')
         . 'OSMMap.init({mapHeight:' . $height . ',apiUrl:window.OSM_API_URL,initZoom:' . (int)$conf['osm_map_zoom'] . ',tile:"' . ($conf['osm_map_tile'] ?? 'carto_voyager') . '"});'
         . '});</script>';
 
@@ -428,28 +478,118 @@ function osmme_inject_on_photo_page() {
     $photo_tile   = isset($conf['osm_map_tile_photo']) ? $conf['osm_map_tile_photo'] : 'carto_voyager';
     $plugin_url   = get_root_url() . 'plugins/osm_map/';
 
-    $html = '<div class="osm-photo-map-wrapper">'
-        . '<h4 class="osm-photo-map-title">&#128205; Localisation'
-        . ' <select id="osm-photo-basemap" title="Fond de carte" style="margin-left:10px;font-size:0.8rem;padding:2px 6px;border:1px solid #ccc;border-radius:4px;"></select>'
-        . ' <button type="button" id="osm-photo-3d" title="Ouvrir la carte en relief 3D dans un nouvel onglet" style="margin-left:6px;font-size:0.8rem;padding:2px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">&#127956;&#65039; 3D</button></h4>'
+    // Vignette de la photo utilisée comme repère sur la carte (repli : repère standard)
+    $thumb = '';
+    try { $thumb = osmme_build_thumb_url($picture['current'], get_root_url()); } catch (Throwable $e) { $thumb = ''; }
+
+    $cfg = array(
+        'lat'    => $lat,
+        'lon'    => $lon,
+        'title'  => isset($picture['current']['name']) ? (string)$picture['current']['name'] : '',
+        'thumb'  => $thumb,
+        'tile'   => $photo_tile,
+        'pid'    => (int)$picture['current']['id'],
+        'root'   => get_root_url(),
+        'inPanel' => !osmme_native_osm_active(),
+        'cartoUrl' => osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'),
+    );
+    $label_title = l10n('Photo location');
+    $label_osm   = l10n('View in OpenStreetMap');
+
+    $html = '<style>'
+        . '.osmme-pin{background:none;border:none;}'
+        . '.osmme-pin img{width:60px;height:60px;object-fit:cover;display:block;border:2px solid #fff;border-radius:3px;box-shadow:0 1px 6px rgba(0,0,0,.55);}'
+        . '#osmme-pm.osmme-in-panel{width:100%;box-sizing:border-box;flex:0 0 100%;min-width:0;}'
+        . '#osmme-pm.osmme-in-panel #osm-photo-map{width:100%!important;margin:0!important;}'
+        . '#osmme-pm{margin:10px 0 14px;}'
+        . '#osmme-pm .osmme-pm-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 6px;}'
+        . '#osmme-pm .osmme-pm-title{font-weight:700;}'
+        . '#osmme-pm .osmme-pm-tools select,#osmme-pm .osmme-pm-tools button{font-size:0.8rem;padding:2px 6px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#333;cursor:pointer;}'
+        . '#osmme-pm .osmme-pm-link{display:block;margin-top:4px;opacity:.75;}'
+        . '</style>'
+        . '<div id="osmme-pm" class="osm-photo-map-wrapper">'
+        . '<div class="osmme-pm-head"><span class="osmme-pm-title">' . htmlspecialchars($label_title) . '</span>'
+        . '<span class="osmme-pm-tools"><select id="osm-photo-basemap" title="Fond de carte"></select> '
+        . '<button type="button" id="osm-photo-3d" title="Ouvrir la carte en relief 3D dans un nouvel onglet">&#127956;&#65039; 3D</button></span></div>'
         . '<div id="osm-photo-map" style="height:' . $photo_height . 'px;width:calc(100% - 60px);margin:0 30px;box-sizing:border-box;"></div>'
-        . '<div class="osm-photo-coords">' . $lat . ', ' . $lon
-        . ' &nbsp;<a href="https://www.openstreetmap.org/?mlat=' . $lat . '&mlon=' . $lon . '&zoom=14"'
-        . ' target="_blank" rel="noopener">Voir sur OpenStreetMap &#8599;</a></div></div>'
-        . '<script src="' . $plugin_url . 'js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>'
-        . '<script>(function(){function init(){'
-        . 'var L=window.L;if(!L){return;}'
-        . 'var m=L.map("osm-photo-map",{fadeAnimation:false,zoomAnimation:false,markerZoomAnimation:false}).setView([' . $lat . ',' . $lon . '],14);'
-        // Même liste de fonds que la galerie (menu « Fond »)
-        . 'if(window.OSMBasemaps){OSMBasemaps.attach(m,{key:' . json_encode($photo_tile) . ',select:document.getElementById("osm-photo-basemap"),button:document.getElementById("osm-photo-3d"),root:' . json_encode(get_root_url()) . ',pid:' . (int)$picture['current']['id'] . ',storageKey:"osmme_basemap_photo"});}'
-        . 'else{var b3=document.getElementById("osm-photo-3d");if(b3){b3.style.display="none";}var tl=L.tileLayer("' . addslashes(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png')) . '",'
-        . '{attribution:"&copy; OpenStreetMap &copy; CARTO",maxZoom:19}).addTo(m);}'
-        // Carte blanche : recalcul de taille
-        . '[150,500,1200,3000].forEach(function(t){setTimeout(function(){m.invalidateSize();},t);});'
-        . 'if(window.ResizeObserver){new ResizeObserver(function(){m.invalidateSize();}).observe(document.getElementById("osm-photo-map"));}'
-        . 'L.marker([' . $lat . ',' . $lon . ']).addTo(m)'
-        . '.bindPopup("<strong>' . $title . '</strong>").openPopup();'
-        . '}(window.osmmeLeaflet||function(n,c){c();})(false,init);})();</script>';
+        . '<a class="osmme-pm-link" href="https://www.openstreetmap.org/?mlat=' . $lat . '&amp;mlon=' . $lon . '#map=15/' . $lat . '/' . $lon . '"'
+        . ' target="_blank" rel="noopener">' . htmlspecialchars($label_osm) . '</a>'
+        . '<div class="osm-photo-coords">' . htmlspecialchars($label_title) . ' : ' . $lat . ', ' . $lon . '</div></div>'
+        . '<script src="' . $plugin_url . 'js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>';
+
+    $js = <<<'JSEOF'
+(function(){
+  var C = __CFG__;
+  var wrap = document.getElementById('osmme-pm');
+  if (!wrap) return;
+
+  // Place la carte dans le panneau « Information » du thème (sinon elle reste en bas de page)
+  function place() {
+    if (!C.inPanel) return true; // piwigo-openstreetmap actif : sa carte occupe le panneau, la nôtre reste en bas
+    if (wrap.getAttribute('data-placed')) return true;
+    var sels = ['.imageInfoTable', '#infoTable', '#info-tab .card-body', '#theImageInfos .card-body', '#theImageInfos', '#info-content', '#Information', '.card-info'];
+    var host = null, i;
+    for (i = 0; i < sels.length && !host; i++) { host = document.querySelector(sels[i]); }
+    if (host && !host.contains(wrap)) {
+      // Liste de rubriques (dl / tableau d'infos) : on se place AVANT elle plutôt qu'à l'intérieur,
+      // sinon certains thèmes (modus…) la traitent comme une colonne et écrasent la carte
+      if (/^(DL|TABLE|UL)$/.test(host.tagName) || host.classList.contains('imageInfoTable')) { host.parentNode.insertBefore(wrap, host); }
+      else { host.insertBefore(wrap, host.firstChild); }
+    } else if (!host) {
+      var labs = document.querySelectorAll('dt, .imageInfoLabel, .imageInfo .name, .imageInfo > span');
+      for (i = 0; i < labs.length; i++) {
+        if (/^\s*(Créée le|Created on|Albums?|Visites|Visits|Date de création)\s*:?\s*$/i.test(labs[i].textContent)) {
+          var row = labs[i].closest('.imageInfo') || labs[i].parentElement;
+          if (row && row.parentNode) { row.parentNode.insertBefore(wrap, row); host = row.parentNode; }
+          break;
+        }
+      }
+    }
+    if (host) { wrap.classList.add('osmme-in-panel'); wrap.setAttribute('data-placed', '1'); return true; }
+    return false;
+  }
+  // Garde-fou : si le thème écrase la carte dans le panneau (largeur < 220 px), on la place sous la photo, pleine largeur
+  function rescue() {
+    if (!wrap.getAttribute('data-placed') || wrap.getBoundingClientRect().width >= 220) return;
+    var t = document.getElementById('comments'), r = document.getElementById('theImageAndInfos');
+    if (t && t.parentNode) { t.parentNode.insertBefore(wrap, t); }
+    else if (r && r.parentNode) { r.parentNode.insertBefore(wrap, r.nextSibling); }
+    else { return; }
+    wrap.classList.remove('osmme-in-panel');
+  }
+  [700, 1800].forEach(function(t) { setTimeout(rescue, t); });
+  var tries = 0;
+  (function again() { if (!place() && tries++ < 5) setTimeout(again, 400); })();
+
+  function init() {
+    var L = window.L; if (!L) return;
+    var el = document.getElementById('osm-photo-map');
+    var m = L.map(el, {fadeAnimation:false, zoomAnimation:false, markerZoomAnimation:false}).setView([C.lat, C.lon], 14);
+    if (window.OSMBasemaps) {
+      OSMBasemaps.attach(m, {key:C.tile, select:document.getElementById('osm-photo-basemap'), button:document.getElementById('osm-photo-3d'), root:C.root, pid:C.pid, storageKey:'osmme_basemap_photo'});
+    } else {
+      var b3 = document.getElementById('osm-photo-3d'); if (b3) b3.style.display = 'none';
+      var bs = document.getElementById('osm-photo-basemap'); if (bs) bs.style.display = 'none';
+      L.tileLayer(C.cartoUrl, {attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:19}).addTo(m);
+    }
+    var mk = L.marker([C.lat, C.lon]);
+    if (C.thumb) {
+      var img = new Image();
+      img.onload = function() {
+        mk.setIcon(L.divIcon({className:'osmme-pin', html:'<img src="' + C.thumb.replace(/"/g, '&quot;') + '" alt="">', iconSize:[64, 64], iconAnchor:[32, 32]}));
+      };
+      img.src = C.thumb;
+    }
+    mk.addTo(m);
+    if (C.title) { mk.bindPopup('<strong></strong>'); mk.on('popupopen', function(e) { e.popup.getElement().querySelector('strong').textContent = C.title; }); }
+    [150, 500, 1200, 3000].forEach(function(t) { setTimeout(function() { m.invalidateSize(); }, t); });
+    if (window.ResizeObserver) new ResizeObserver(function() { m.invalidateSize(); }).observe(el);
+    if (window.IntersectionObserver) new IntersectionObserver(function(en) { if (en[0].isIntersecting) m.invalidateSize(); }).observe(el);
+  }
+  (window.osmmeLeaflet || function(n, c) { c(); })(false, init);
+})();
+JSEOF;
+    $html .= '<script>' . str_replace('__CFG__', json_encode($cfg, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP), $js) . '</script>';
 
     $template->append('footer_elements', $html);
 }
@@ -465,22 +605,13 @@ function osmme_places_for_batch() {
     try { return osmme_pl_list(); } catch (Throwable $e) { return array(); }
 }
 
-function osmme_loc_end_element_set_unit() {
-    global $template, $conf;
-
-    // Sécurité : ne s'exécute que si la variable template existe
-    if (!isset($template) || !is_object($template)) return;
-
-    $height     = isset($conf['osm_map_unit_height'])    ? (int)$conf['osm_map_unit_height']    : 280;
+// Variables JS partagées par le mode unitaire et l'action par lot (fond, lieux favoris, clé Carto…)
+function osmme_batch_head_script() {
+    global $conf;
     // Relire depuis DB pour avoir la valeur la plus fraîche
     $res_tk = pwg_query("SELECT value FROM " . CONFIG_TABLE . " WHERE param = 'osm_map_tile_geotag'");
     $row_tk = pwg_db_fetch_assoc($res_tk);
     $tile_key = $row_tk ? $row_tk['value'] : (isset($conf['osm_map_tile_geotag']) ? $conf['osm_map_tile_geotag'] : 'carto_voyager');
-    $tpl        = realpath(dirname(__FILE__) . '/template/batch_unit.tpl');
-    if (!$tpl) return;
-
-    // URLs avec {literal}{s}{/literal} etc. pour éviter l'interprétation Smarty
-    // Accolades encodées pour éviter l'interprétation Smarty dans le .tpl
     $tiles_map = array(
         'carto_voyager'  => array(osmme_carto_tile_url('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'), '&copy; OpenStreetMap &copy; CARTO', 19),
         'osm_standard'   => array('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap contributors', 19),
@@ -489,17 +620,28 @@ function osmme_loc_end_element_set_unit() {
         'osm_france'     => array('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', '&copy; OpenStreetMap France | &copy; OpenStreetMap contributors', 20),
     );
     $t = isset($tiles_map[$tile_key]) ? $tiles_map[$tile_key] : $tiles_map['carto_voyager'];
+    return '<script src="' . get_root_url() . 'plugins/osm_map/js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>'
+         . '<script>window.OSM_BATCH_TILE_KEY=' . osmme_js($tile_key) . ';'
+         . 'window.OSM_BATCH_ROOT=' . osmme_js(get_root_url()) . ';'
+         . 'window.OSM_PLACES=' . osmme_js(osmme_places_for_batch()) . ';'
+         . 'window.OSM_CARTO_API_KEY=' . osmme_js(osmme_resolve_carto_key()) . ';'
+         . 'window.OSM_BATCH_TOKEN=' . osmme_js(get_pwg_token()) . ';'
+         . 'window.OSM_BATCH_TILE_URL="' . addslashes($t[0]) . '";'
+         . 'window.OSM_BATCH_TILE_ATTR="' . addslashes($t[1]) . '";'
+         . 'window.OSM_BATCH_TILE_MAXZOOM=' . (int)$t[2] . ';</script>';
+}
 
-    // Injecter l'URL tile via head_elements (avant le template) pour éviter Smarty avec {s}{z}
-    $tile_js = '<script src="' . get_root_url() . 'plugins/osm_map/js/basemaps.js?v=' . OSM_MAP_ASSET_V . '"></script>'
-             . '<script>window.OSM_BATCH_TILE_KEY=' . json_encode($tile_key) . ';'
-             . 'window.OSM_BATCH_ROOT=' . json_encode(get_root_url()) . ';'
-             . 'window.OSM_PLACES=' . json_encode(osmme_places_for_batch()) . ';'
-             . 'window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';'
-             . 'window.OSM_BATCH_TILE_URL="' . addslashes($t[0]) . '";'
-             . 'window.OSM_BATCH_TILE_ATTR="' . addslashes($t[1]) . '";'
-             . 'window.OSM_BATCH_TILE_MAXZOOM=' . (int)$t[2] . ';</script>';
-    $template->append('head_elements', $tile_js);
+function osmme_loc_end_element_set_unit() {
+    global $template, $conf;
+
+    // Sécurité : ne s'exécute que si la variable template existe
+    if (!isset($template) || !is_object($template)) return;
+
+    $height = isset($conf['osm_map_unit_height']) ? (int)$conf['osm_map_unit_height'] : 280;
+    $tpl    = realpath(dirname(__FILE__) . '/template/batch_unit.tpl');
+    if (!$tpl) return;
+
+    $template->append('head_elements', osmme_batch_head_script());
 
     $template->assign(array(
         'OSM_UNIT_HEIGHT'  => $height,
@@ -510,16 +652,73 @@ function osmme_loc_end_element_set_unit() {
 
 
 // ============================================================================
+// GÉOTAGGAGE — Mode global de la gestion par lot : action « OSM Map Plus »
+// (grande carte, recherche de lieu, lieux favoris, fonds de carte ; une même
+// position est appliquée à toutes les photos sélectionnées)
+// ============================================================================
+function osmme_loc_end_element_set_global() {
+    global $template, $conf;
+    if (!isset($template) || !is_object($template)) return;
+    $tpl = realpath(dirname(__FILE__) . '/template/batch_global.tpl');
+    if (!$tpl) return;
+
+    $height = isset($conf['osm_map_edit_height']) ? (int)$conf['osm_map_edit_height'] : 400;
+    $height = max(300, min(640, $height));
+
+    $template->append('head_elements', osmme_batch_head_script());
+    $template->set_filename('osmme_batch_global', $tpl);
+    $template->assign(array('OSMME_G_HEIGHT' => $height, 'OSMME_G_TOKEN' => get_pwg_token()));
+    $template->append('element_set_global_plugins_actions', array(
+        'ID'      => 'osmmap_plus',
+        'NAME'    => '&#127760; OSM Map Plus',
+        'CONTENT' => $template->parse('osmme_batch_global', true),
+    ));
+}
+
+function osmme_element_set_global_action($action, $collection) {
+    global $page;
+    if ($action !== 'osmmap_plus') return;
+    if (!function_exists('is_admin') || !is_admin()) return;
+    check_pwg_token();
+    $ids = array_values(array_filter(array_map('intval', (array)$collection)));
+    if (!$ids) { $page['warnings'][] = 'OSM Map Plus : aucune photo sélectionnée.'; return; }
+    $in = implode(',', $ids);
+    $lat = isset($_POST['osmme_g_lat']) ? trim($_POST['osmme_g_lat']) : '';
+    $lon = isset($_POST['osmme_g_lon']) ? trim($_POST['osmme_g_lon']) : '';
+
+    if (!empty($_POST['osmme_g_clear'])) {
+        pwg_query('UPDATE ' . IMAGES_TABLE . ' SET latitude=NULL, longitude=NULL WHERE id IN (' . $in . ')');
+        $page['infos'][] = 'OSM Map Plus : GPS effacé pour ' . count($ids) . ' photo(s).';
+        return;
+    }
+    $lat = str_replace(',', '.', $lat);
+    $lon = str_replace(',', '.', $lon);
+    if ($lat === '' || $lon === '') {
+        $page['errors'][] = 'OSM Map Plus : choisissez une position sur la carte (latitude/longitude vides).';
+        return;
+    }
+    if (!is_numeric($lat) || !is_numeric($lon)
+        || (float)$lat < -90 || (float)$lat > 90 || (float)$lon < -180 || (float)$lon > 180) {
+        $page['errors'][] = 'OSM Map Plus : valeurs invalides (latitude -90→90, longitude -180→180).';
+        return;
+    }
+    pwg_query('UPDATE ' . IMAGES_TABLE . ' SET latitude=' . (float)$lat . ', longitude=' . (float)$lon . ' WHERE id IN (' . $in . ')');
+    $page['infos'][] = 'OSM Map Plus : position ' . (float)$lat . ', ' . (float)$lon . ' enregistrée pour ' . count($ids) . ' photo(s).';
+}
+
+// ============================================================================
 // Injection Leaflet en admin (batch manager mode unitaire uniquement)
 // ============================================================================
 function osmme_inject_leaflet_admin() {
     // Uniquement sur batch_manager mode unit
     if (!isset($_GET['page']) || $_GET['page'] !== 'batch_manager') return;
-    if (!isset($_GET['mode']) || $_GET['mode'] !== 'unit') return;
+    // mode unitaire, ou mode global (par défaut quand « mode » est absent) pour l'action « OSM Map Plus »
+    $mode = isset($_GET['mode']) ? $_GET['mode'] : 'global';
+    if ($mode !== 'unit' && $mode !== 'global') return;
 
     global $template;
     $template->append('head_elements',
-        '<script>window.OSM_CARTO_API_KEY=' . json_encode(osmme_resolve_carto_key()) . ';</script>' .
+        '<script>window.OSM_CARTO_API_KEY=' . osmme_js(osmme_resolve_carto_key()) . ';</script>' .
         '<style>.leaflet-container .leaflet-tile{opacity:1!important;visibility:visible!important;max-width:none!important;max-height:none!important;}.leaflet-tile-pane{opacity:1!important;visibility:visible!important;}</style>' .
         '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />' . "\n" .
         '<script>' . osmme_loader_js() . '</script>'
@@ -598,6 +797,97 @@ document.addEventListener('DOMContentLoaded', function () {
   if (lists.length) { lists[lists.length - 1].appendChild(mk('li', '', '<a href="' + href + '" data-osmme-menu="1">' + label + '</a>')); }
 });
 JSEOF;
-    $js = str_replace(array('__HREF__', '__LABEL__'), array(json_encode($url), json_encode($inner)), $js);
+    $js = str_replace(array('__HREF__', '__LABEL__'), array(osmme_js($url), osmme_js($inner)), $js);
+    $template->append('head_elements', '<script>' . $js . '</script>');
+}
+
+
+// ============================================================================
+// Page « Propriétés » d'un album : option d'affichage de la carte (prend la main sur le réglage général)
+// ============================================================================
+function osmme_cat_modify() {
+    global $template, $conf;
+    if (!isset($template) || !is_object($template)) return;
+    if (!function_exists('is_admin') || !is_admin()) return;
+    $cat_id = isset($_GET['cat_id']) ? (int)$_GET['cat_id'] : 0;
+    if ($cat_id <= 0) return;
+
+    // Enregistrement (avant l'affichage de la valeur courante)
+    if (isset($_POST['submit']) && isset($_POST['osmme_album_display'])
+        && isset($_POST['pwg_token']) && $_POST['pwg_token'] === get_pwg_token()) {
+        $v = $_POST['osmme_album_display'];
+        $all = osmme_album_positions();
+        if (osmme_valid_pos($v)) { $all[$cat_id] = $v; } else { unset($all[$cat_id]); }
+        $json = json_encode((object)$all);
+        conf_update_param('osm_map_album_pos', $json);
+        $conf['osm_map_album_pos'] = $json;
+    }
+
+    $all = osmme_album_positions();
+    $cur = (isset($all[$cat_id]) && osmme_valid_pos($all[$cat_id])) ? $all[$cat_id] : '';
+    $labels = array('top' => 'En haut', 'bottom' => 'En bas', 'none' => 'Pas d\'affichage');
+    $gen = (isset($conf['osm_map_position']) && osmme_valid_pos($conf['osm_map_position'])) ? $conf['osm_map_position'] : 'bottom';
+
+    $opts = '<option value=""' . ($cur === '' ? ' selected' : '') . '>Réglage général (actuellement : ' . $labels[$gen] . ')</option>';
+    foreach ($labels as $k => $l) {
+        $opts .= '<option value="' . $k . '"' . ($cur === $k ? ' selected' : '') . '>' . $l . '</option>';
+    }
+    $note = osmme_native_osm_active() ? ' (piwigo-openstreetmap est actif : « En haut » est traité comme « En bas ».)' : '';
+    $cfg = array(
+        'catId' => $cat_id,
+        'token' => get_pwg_token(),
+        'url'   => get_root_url() . 'plugins/osm_map/osmme-albumpos.php',
+        'title' => 'OSM Map Plus — carte de l\'album',
+        'help'  => 'Prend la main sur le réglage général d\'OSM Map Plus pour cet album.' . $note,
+        'opts'  => $opts,
+        'saved' => 'Enregistré',
+    );
+
+    $js = <<<'JSEOF'
+document.addEventListener('DOMContentLoaded', function () {
+  if (document.getElementById('osmme-cat-row')) return;
+  var C = __CFG__;
+  function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+  // Piwigo 16+ : page sans <form>, enregistrement en AJAX -> on enregistre le choix dès qu'il change
+  var box = document.querySelector('.cat-modify-form');
+  if (box) {
+    var row = document.createElement('div');
+    row.className = 'cat-modify-input-container';
+    row.id = 'osmme-cat-row';
+    row.innerHTML = '<label for="osmme-album-display">&#127760; ' + esc(C.title) + '</label>'
+      + '<select id="osmme-album-display" style="width:100%;padding:12px 14px;border:none;background:#f3f3f3;font-size:1rem;color:inherit;">' + C.opts + '</select>'
+      + '<span style="display:block;margin-top:6px;color:#777;font-size:0.9em;">' + esc(C.help) + ' <b id="osmme-cat-msg" style="color:#2e7d32;"></b></span>';
+    var sw = box.querySelectorAll('.cat-modify-switch-container'), last = sw.length ? sw[sw.length - 1] : null;
+    if (last && last.parentNode === box) { box.insertBefore(row, last.nextSibling); } else { box.appendChild(row); }
+    var sel = document.getElementById('osmme-album-display'), msg = document.getElementById('osmme-cat-msg');
+    sel.addEventListener('change', function () {
+      var fd = new FormData();
+      fd.append('cat_id', C.catId); fd.append('pos', sel.value); fd.append('pwg_token', C.token);
+      msg.style.color = '#777'; msg.textContent = '…';
+      fetch(C.url, {method: 'POST', body: fd, credentials: 'same-origin'})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.ok) { msg.style.color = '#2e7d32'; msg.textContent = '✓ ' + C.saved; }
+          else { msg.style.color = '#c62828'; msg.textContent = '✗ Erreur'; }
+        })
+        .catch(function () { msg.style.color = '#c62828'; msg.textContent = '✗ Erreur'; });
+    });
+    return;
+  }
+
+  // Anciennes versions de Piwigo : formulaire classique, enregistré avec le bouton « Valider »
+  var f = document.getElementById('catModify') || document.querySelector('form[action*="cat_modify"], form[action*="album-"]');
+  if (!f) { var b0 = document.querySelector('input[name="submit"]'); f = b0 && b0.form; }
+  if (!f) return;
+  var p = document.createElement('p');
+  p.id = 'osmme-cat-row'; p.style.margin = '16px 0';
+  p.innerHTML = '<strong>&#127760; ' + esc(C.title) + '</strong><br><select name="osmme_album_display" style="margin-top:4px;">' + C.opts + '</select><br><span style="color:#777;font-size:0.9em;">' + esc(C.help) + '</span>';
+  var btn = f.querySelector('input[name="submit"], button[name="submit"]');
+  var anchor = btn ? (btn.closest('p, .formButtons, .buttons, div') || btn) : null;
+  if (anchor && anchor.parentNode && f.contains(anchor)) { anchor.parentNode.insertBefore(p, anchor); } else { f.appendChild(p); }
+});
+JSEOF;
+    $js = str_replace('__CFG__', json_encode($cfg, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE), $js);
     $template->append('head_elements', '<script>' . $js . '</script>');
 }

@@ -634,9 +634,10 @@ var OSMMap = (function () {
   function _buildPopup(p) {
     var pageUrl = _getPageUrl(p);
     var html = '<div style="font-size:13px;max-width:230px;">';
+    pageUrl = _esc(pageUrl);
     if (p.thumbnail_url) {
       html += '<a href="' + pageUrl + '" target="_blank" rel="noopener">'
-            + '<img src="' + p.thumbnail_url + '" '
+            + '<img src="' + _esc(p.thumbnail_url) + '" '
             + 'style="width:100%;max-height:130px;object-fit:cover;border-radius:4px;margin-bottom:6px;display:block;" '
             + 'onerror="this.style.display=\'none\'">'
             + '</a>';
@@ -742,13 +743,13 @@ var OSMMap = (function () {
     var html = '';
     photos.forEach(function (p) {
       html += '<div class="osm-panel-item" id="osm-pi-' + p.id + '"'
-            + ' data-lat="' + p.latitude + '" data-lon="' + p.longitude + '">';
+            + ' data-lat="' + _esc(p.latitude) + '" data-lon="' + _esc(p.longitude) + '">';
 
       // Miniature — lien natif sans target="_blank" (compatible Safari localhost)
-      html += '<a href="' + p.page_url + '" class="osm-pi-thumb-link" target="_blank" rel="noopener">';
+      html += '<a href="' + _esc(p.page_url) + '" class="osm-pi-thumb-link" target="_blank" rel="noopener">';
       html += '<div class="osm-pi-thumb">';
       if (p.thumbnail_url) {
-        html += '<img src="' + p.thumbnail_url + '" alt="" loading="lazy"'
+        html += '<img src="' + _esc(p.thumbnail_url) + '" alt="" loading="lazy"'
               + ' onerror="this.parentNode.innerHTML=\'&#128247;\'">';
       } else {
         html += '<span>&#128247;</span>';
@@ -756,10 +757,10 @@ var OSMMap = (function () {
       html += '</div></a>';
 
       // Infos — lien natif
-      html += '<a href="' + p.page_url + '" class="osm-pi-info" target="_blank" rel="noopener">';
+      html += '<a href="' + _esc(p.page_url) + '" class="osm-pi-info" target="_blank" rel="noopener">';
       html += '<span class="osm-pi-name">' + _esc(p.name) + '</span>';
       if (p.album_name) html += '<span class="osm-pi-album">&#128193; ' + _esc(p.album_name) + '</span>';
-      if (p.date)       html += '<span class="osm-pi-date">&#128197; ' + p.date + '</span>';
+      if (p.date)       html += '<span class="osm-pi-date">&#128197; ' + _esc(p.date) + '</span>';
       html += '</a>';
 
       html += '</div>';
@@ -945,7 +946,7 @@ var OSMMap = (function () {
         drop.style.display = 'block'; return;
       }
       drop.innerHTML = results.map(function (r) {
-        return '<div class="osm-geo-item" data-lat="' + r.lat + '" data-lon="' + r.lon + '">'
+        return '<div class="osm-geo-item" data-lat="' + _esc(r.lat) + '" data-lon="' + _esc(r.lon) + '">'
              + _esc(r.display_name) + '</div>';
       }).join('');
       drop.style.display = 'block';

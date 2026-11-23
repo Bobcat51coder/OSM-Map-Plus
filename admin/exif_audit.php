@@ -6,6 +6,7 @@
  */
 if (!defined('PHPWG_ROOT_PATH')) die('Hacking attempt!');
 check_status(ACCESS_ADMINISTRATOR);
+include_once(dirname(__FILE__) . '/../include/admin_tabs.inc.php');
 global $template;
 
 $root  = get_root_url();
@@ -34,7 +35,7 @@ $html = '
 .osm-warn { background:#fff4e5; border:1px solid #f5c27a; border-radius:4px; padding:8px 12px; margin-bottom:12px; }
 </style>
 <div id="osm-audit">
-  <p><a href="' . $root . 'admin.php?page=plugin-osm_map">&larr; Retour aux paramètres d\'OSM Map Plus</a></p>
+  ' . osmme_admin_tabs('audit') . '
   <h3>&#127760; Écarts entre la base et le GPS EXIF des fichiers</h3>';
 if (!$exif_ext) {
     $html .= '<div class="osm-warn">L\'extension PHP <code>exif</code> n\'est pas active sur ce serveur : l\'analyse est impossible.</div>';
@@ -83,7 +84,7 @@ $html .= '
 </div>
 <script>
 (function() {
-  var EP = ' . json_encode($ep) . ', EDIT = ' . json_encode($edit) . ', TOKEN = ' . json_encode($token) . ';
+  var EP = ' . osmme_js($ep) . ', EDIT = ' . osmme_js($edit) . ', TOKEN = ' . osmme_js($token) . ';
   var running = false, all = [], byId = {}, page = 1;
   var $ = function(i) { return document.getElementById(i); };
   function fmt(e) { return e ? e.lat.toFixed(6) + ", " + e.lon.toFixed(6) : "—"; }

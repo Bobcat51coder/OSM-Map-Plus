@@ -25,6 +25,7 @@ class osm_map_maintain extends PluginMaintain
         'osm_map_tile_photo'    => 'carto_voyager',
         'osm_map_photo_height'  => '220',
         'osm_map_hide_if_osm'   => '0',
+        'osm_map_position'      => 'bottom',
         'osm_map_carto_api_key' => '',
     );
 

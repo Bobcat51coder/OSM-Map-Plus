@@ -117,21 +117,35 @@ function osmme_pl_restore() {
     return 0;
 }
 
-// Table des lieux de piwigo-openstreetmap (si présente)
+// Table des lieux de piwigo-openstreetmap (si présente) : <préfixe choisi à l'installation>osm_places.
+// Repli : toute table de la base dont le nom se termine par « osm_places » (préfixe différent de celui de Piwigo).
 function osmme_pl_osm_table() {
     global $prefixeTable;
     $t = $prefixeTable . 'osm_places';
-    $r = pwg_query('SHOW TABLES LIKE \'' . pwg_db_real_escape_string($t) . '\'');
-    return pwg_db_fetch_assoc($r) ? $t : null;
+    $r = pwg_query('SHOW TABLES LIKE \'' . pwg_db_real_escape_string(str_replace(array('_', '%'), array('\\_', '\\%'), $t)) . '\'');
+    if (pwg_db_fetch_assoc($r)) { return $t; }
+    $r = pwg_query('SHOW TABLES LIKE \'%osm\\_places\'');
+    while ($row = pwg_db_fetch_row($r)) {
+        if (!empty($row[0])) { return $row[0]; }
+    }
+    return null;
+}
+// Nombre de lieux dans la table de piwigo-openstreetmap
+function osmme_pl_osm_count() {
+    $t = osmme_pl_osm_table();
+    if (!$t) { return 0; }
+    $r = pwg_db_fetch_assoc(pwg_query('SELECT COUNT(*) AS n FROM `' . $t . '`'));
+    return (int)$r['n'];
 }
 function osmme_pl_import_osm() {
     $t = osmme_pl_osm_table();
     if (!$t) { return array('found' => false, 'imported' => 0); }
     $places = array();
-    $res = pwg_query('SELECT id, name, latitude, longitude, parentId FROM `' . $t . '`');
+    $res = pwg_query('SELECT * FROM `' . $t . '`');
     while ($r = pwg_db_fetch_assoc($res)) {
+        $parent = isset($r['parentId']) ? $r['parentId'] : (isset($r['parent_id']) ? $r['parent_id'] : null);
         $places[] = array('id' => (int)$r['id'], 'name' => $r['name'], 'lat' => $r['latitude'], 'lon' => $r['longitude'],
-                          'parent' => $r['parentId'] === null ? null : (int)$r['parentId']);
+                          'parent' => ($parent === null || (int)$parent === 0) ? null : (int)$parent);
     }
     return array('found' => true, 'imported' => osmme_pl_import(json_encode(array('places' => $places))), 'total' => count($places));
 }

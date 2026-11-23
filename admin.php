@@ -10,6 +10,7 @@
 // Inclus par Piwigo via get_admin_plugin_menu_links → admin.php
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 check_status(ACCESS_ADMINISTRATOR);
+include_once(dirname(__FILE__) . '/include/admin_tabs.inc.php');
 
 $page['title'] = 'OSM Map Plus';
 $errors = array();
@@ -53,6 +54,10 @@ if (isset($_POST['submit_osm'])) {
     conf_update_param('osm_map_tile_photo', $tile_photo);
     conf_update_param('osm_map_photo_height', max(150, min(800, (int)($_POST['osm_map_photo_height'] ?? 220))));
     conf_update_param('osm_map_unit_height', max(150, min(800,  (int)($_POST['osm_map_unit_height'] ?? 280))));
+    // champ désactivé (absent du POST) quand piwigo-openstreetmap est actif : on garde alors le choix enregistré
+    if (isset($_POST['osm_map_position'])) {
+        conf_update_param('osm_map_position', in_array($_POST['osm_map_position'], array('top', 'bottom', 'none'), true) ? $_POST['osm_map_position'] : 'bottom');
+    }
     conf_update_param('osm_map_hide_if_osm', !empty($_POST['osm_map_hide_if_osm']) ? '1' : '0');
     conf_update_param('osm_map_carto_api_key', trim($_POST['osm_map_carto_api_key'] ?? ''));
 
@@ -73,6 +78,8 @@ $osm_tile_edit    = isset($conf['osm_map_tile_edit'])    ? $conf['osm_map_tile_e
 $osm_edit_height  = isset($conf['osm_map_edit_height'])  ? (int)$conf['osm_map_edit_height'] : 400;
 $osm_unit_height  = isset($conf['osm_map_unit_height'])  ? (int)$conf['osm_map_unit_height'] : 280;
 $osm_hide_if_osm  = isset($conf['osm_map_hide_if_osm'])  && $conf['osm_map_hide_if_osm'] == '1';
+$osm_position     = (isset($conf['osm_map_position']) && in_array($conf['osm_map_position'], array('top', 'bottom', 'none'), true)) ? $conf['osm_map_position'] : 'bottom';
+$osm_native_active = isset($GLOBALS['pwg_loaded_plugins']['piwigo-openstreetmap']);
 $osm_carto_api_key = isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '';
 
 // ── Stats ─────────────────────────────────────────────────────────────────
@@ -87,6 +94,7 @@ ob_start();
 <div class="titrePage">
   <h2>OSM Map Plus &mdash; Configuration <span style="font-size:0.6em;font-weight:normal;color:#888;margin-left:12px;">v<?= OSM_MAP_VERSION ?></span></h2>
 </div>
+<?= osmme_admin_tabs('settings') ?>
 
 <?php if (!empty($infos)): ?>
 <div class="infos"><ul><?php foreach ($infos as $m): ?><li><?= htmlspecialchars($m) ?></li><?php endforeach ?></ul></div>
@@ -132,9 +140,6 @@ ob_start();
     </div>
     <?php endif ?>
   </div>
-  <p style="margin:0;padding:0 16px 16px;display:flex;gap:12px;flex-wrap:wrap;"><a class="submit" style="display:inline-block;padding:10px 20px;font-size:1.1rem;font-weight:600;text-decoration:none;" href="<?= get_root_url() ?>admin.php?page=plugin&amp;section=osm_map/admin/places.php">⭐ Lieux favoris</a>
-  <a class="submit" style="display:inline-block;padding:10px 20px;font-size:1.1rem;font-weight:600;text-decoration:none;" href="<?= get_root_url() ?>admin.php?page=plugin&amp;section=osm_map/admin/no_gps.php">📍 Photos sans GPS</a>
-  <a class="submit" style="display:inline-block;padding:10px 20px;font-size:1.1rem;font-weight:600;text-decoration:none;" href="<?= get_root_url() ?>admin.php?page=plugin&amp;section=osm_map/admin/exif_audit.php">🔎 Écarts GPS / EXIF — audit de la galerie</a></p>
 </div>
 
 <!-- Options -->
@@ -206,6 +211,21 @@ ob_start();
         inp.addEventListener('input',u); u();
       })();
       </script>
+    </div>
+  </div>
+
+  <!-- Position de la grande carte -->
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Affichage de la carte de la galerie</strong>
+      <p class="description">Place la grande carte en haut ou en bas des pages d'albums, ou la masque. Chaque album peut avoir son propre choix (page « Propriétés » de l'album), qui prend la main sur ce réglage. <?php if ($osm_native_active): ?><br><strong>piwigo-openstreetmap est actif :</strong> il affiche sa carte en haut, « En haut » est donc traité comme « En bas ». La petite carte des pages photo reste aussi en bas de page.<?php endif ?></p>
+    </div>
+    <div class="osm-admin-field">
+      <select name="osm_map_position">
+        <option value="top" <?= $osm_position === 'top' ? 'selected' : '' ?>>En haut de la page</option>
+        <option value="bottom" <?= $osm_position === 'bottom' ? 'selected' : '' ?>>En bas de la page</option>
+        <option value="none" <?= $osm_position === 'none' ? 'selected' : '' ?>>Pas d'affichage</option>
+      </select>
     </div>
   </div>
 
@@ -329,6 +349,108 @@ ob_start();
 
 <p><input type="hidden" name="submit_osm" value="1"><input class="submit" type="submit" value="💾 Enregistrer"></p>
 </form>
+
+<?php
+// ── État de l'affichage de la carte par album ───────────────────────────
+$osmme_cats = array();   // id => nom complet (« Parent / Enfant »)
+$osmme_q = pwg_query('SELECT id, name, uppercats FROM ' . CATEGORIES_TABLE);
+$osmme_raw = array();
+while ($r = pwg_db_fetch_assoc($osmme_q)) { $osmme_raw[(int)$r['id']] = $r; }
+foreach ($osmme_raw as $id => $r) {
+    $parts = array();
+    foreach (explode(',', $r['uppercats']) as $u) { $u = (int)$u; if (isset($osmme_raw[$u])) $parts[] = $osmme_raw[$u]['name']; }
+    $osmme_cats[$id] = implode(' / ', $parts);
+}
+asort($osmme_cats, SORT_NATURAL | SORT_FLAG_CASE);
+$osmme_over = osmme_album_positions();
+// tri par nom d'album (les albums supprimés à la fin)
+uksort($osmme_over, function ($a, $b) use ($osmme_cats) {
+    $na = isset($osmme_cats[(int)$a]) ? $osmme_cats[(int)$a] : "\xff" . $a;
+    $nb = isset($osmme_cats[(int)$b]) ? $osmme_cats[(int)$b] : "\xff" . $b;
+    return strnatcasecmp($na, $nb);
+});
+$osmme_lbl  = array('top' => 'En haut', 'bottom' => 'En bas', 'none' => 'Pas d\'affichage');
+$osmme_cnt  = array('top' => 0, 'bottom' => 0, 'none' => 0);
+foreach ($osmme_over as $cid => $v) { if (isset($osmme_cnt[$v]) && isset($osmme_cats[(int)$cid])) $osmme_cnt[$v]++; }
+$osmme_nb_over = array_sum($osmme_cnt);
+$osmme_nb_follow = max(0, count($osmme_cats) - count(array_intersect_key($osmme_over, $osmme_cats)));
+$osmme_tok = get_pwg_token();
+$osmme_ep  = get_root_url() . 'plugins/osm_map/osmme-albumpos.php';
+?>
+<div class="osm-admin-section" id="osmme-albstate">
+  <h3>🗂️ Affichage de la carte par album</h3>
+  <div style="padding:14px 16px;">
+    <p style="margin:0 0 10px;">
+      Réglage général : <strong><?= $osmme_lbl[$osm_position] ?></strong><?= ($osm_native_active && $osm_position === 'top') ? ' <em>(traité comme « En bas » : piwigo-openstreetmap est actif)</em>' : '' ?>.
+      <strong><?= $osmme_nb_follow ?></strong> album(s) le suivent.
+      <strong><?= $osmme_nb_over ?></strong> album(s) ont un réglage propre :
+      <?= $osmme_cnt['top'] ?> en haut · <?= $osmme_cnt['bottom'] ?> en bas · <?= $osmme_cnt['none'] ?> sans carte.
+    </p>
+
+    <table class="osmme-albtbl" style="width:100%;border-collapse:collapse;">
+      <thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">Album</th><th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;width:230px;">Affichage</th></tr></thead>
+      <tbody id="osmme-albrows">
+      <?php foreach ($osmme_over as $cid => $v): if (!in_array($v, array('top','bottom','none'), true)) continue; ?>
+        <tr data-cid="<?= (int)$cid ?>">
+          <td style="padding:6px;border-bottom:1px solid #eee;">
+            <?php if (isset($osmme_cats[(int)$cid])): ?>
+              <a href="<?= get_root_url() ?>admin.php?page=album-<?= (int)$cid ?>-properties"><?= htmlspecialchars($osmme_cats[(int)$cid]) ?></a>
+            <?php else: ?><em>(album supprimé #<?= (int)$cid ?>)</em><?php endif ?>
+          </td>
+          <td style="padding:6px;border-bottom:1px solid #eee;">
+            <select class="osmme-albsel">
+              <option value="">Réglage général</option>
+              <?php foreach ($osmme_lbl as $k => $l): ?><option value="<?= $k ?>" <?= $v === $k ? 'selected' : '' ?>><?= $l ?></option><?php endforeach ?>
+            </select> <span class="osmme-albmsg" style="color:#2e7d32;"></span>
+          </td>
+        </tr>
+      <?php endforeach ?>
+      </tbody>
+    </table>
+    <?php if (!$osmme_nb_over): ?><p style="color:#666;margin:8px 0 0;"><em>Aucun album n'a de réglage propre : tous suivent le réglage général.</em></p><?php endif ?>
+
+    <p style="margin:14px 0 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select id="osmme-albadd">
+        <option value="">+ Ajouter un album…</option>
+        <?php foreach ($osmme_cats as $cid => $nm): if (isset($osmme_over[$cid])) continue; ?>
+          <option value="<?= (int)$cid ?>"><?= htmlspecialchars($nm) ?></option>
+        <?php endforeach ?>
+      </select>
+      <select id="osmme-albaddpos">
+        <?php foreach ($osmme_lbl as $k => $l): ?><option value="<?= $k ?>" <?= $k === 'none' ? 'selected' : '' ?>><?= $l ?></option><?php endforeach ?>
+      </select>
+      <button type="button" id="osmme-albaddbtn" class="submit">Ajouter</button>
+    </p>
+    <p style="color:#777;font-size:0.85em;margin:8px 0 0;">Chaque changement est enregistré immédiatement. Ce réglage peut aussi être modifié dans la page « Propriétés » de chaque album. Un réglage s'applique à l'album lui-même, pas à ses sous-albums.</p>
+  </div>
+</div>
+<script>
+(function () {
+  var EP = <?= osmme_js($osmme_ep) ?>, TOKEN = <?= osmme_js($osmme_tok) ?>;
+  function save(cid, pos, msg, done) {
+    var fd = new FormData(); fd.append('cat_id', cid); fd.append('pos', pos); fd.append('pwg_token', TOKEN);
+    if (msg) { msg.style.color = '#777'; msg.textContent = '…'; }
+    fetch(EP, {method: 'POST', body: fd, credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) { if (msg) { msg.style.color = '#2e7d32'; msg.textContent = '✓ Enregistré'; } if (done) done(); }
+      else if (msg) { msg.style.color = '#c62828'; msg.textContent = '✗ Erreur'; }
+    }).catch(function () { if (msg) { msg.style.color = '#c62828'; msg.textContent = '✗ Erreur'; } });
+  }
+  document.getElementById('osmme-albrows').addEventListener('change', function (e) {
+    if (!e.target.classList.contains('osmme-albsel')) return;
+    var tr = e.target.closest('tr'), msg = tr.querySelector('.osmme-albmsg');
+    save(tr.getAttribute('data-cid'), e.target.value, msg, function () {
+      // « Réglage général » : l'album n'a plus de réglage propre -> on retire la ligne
+      if (e.target.value === '') { setTimeout(function () { location.reload(); }, 400); }
+    });
+  });
+  document.getElementById('osmme-albaddbtn').addEventListener('click', function () {
+    var cid = document.getElementById('osmme-albadd').value, pos = document.getElementById('osmme-albaddpos').value;
+    if (!cid) return;
+    save(cid, pos, null, function () { location.reload(); });
+  });
+})();
+</script>
+
 </div><!-- /osm-admin-wrap -->
 <?php
 $_admin_content = ob_get_clean();

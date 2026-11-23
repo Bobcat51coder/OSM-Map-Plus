@@ -21,6 +21,8 @@ include_once(dirname(__FILE__) . '/include/exif_gps.inc.php');
 foreach (array('include/derivative_params.inc.php','include/derivative_std_params.inc.php','include/functions_picture.inc.php') as $f_inc) {
     if (file_exists(PHPWG_ROOT_PATH . $f_inc)) { include_once(PHPWG_ROOT_PATH . $f_inc); }
 }
+// URL absolues : get_root_url() vaudrait "../../", faux depuis la page admin qui appelle ce script
+set_make_full_url();
 function osmme_thumb_url($row) {
     try {
         $u = (new DerivativeImage(ImageStdParams::get_by_type(IMG_SQUARE), new SrcImage($row)))->get_url();

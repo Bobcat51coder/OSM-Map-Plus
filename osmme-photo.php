@@ -27,6 +27,10 @@ foreach (['include/derivative_params.inc.php','include/derivative_std_params.inc
     if (file_exists($root_path . $f)) include_once($root_path . $f);
 }
 
+// Ce script est dans plugins/osm_map/ : get_root_url() y vaut "../../", chemin faux
+// pour la page qui affiche la carte (ex. /piwigo/ -> /_data/...). On force des URL
+// absolues (racine du site comprise), y compris celles de make_picture_url().
+set_make_full_url();
 $base_url = get_root_url();
 
 // Helper : construire les données d'une photo
