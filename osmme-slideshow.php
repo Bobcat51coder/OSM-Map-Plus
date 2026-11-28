@@ -65,9 +65,13 @@ $query = 'SELECT DISTINCT i.*
 
 $res = pwg_query($query);
 $base_url = get_root_url();
+include_once(dirname(__FILE__) . '/include/picture_url.inc.php');
+$all_rows = array();
+while ($r0 = pwg_db_fetch_assoc($res)) { $all_rows[] = $r0; }
+$albums_for = osmme_pick_albums(array_map(function ($r) { return $r['id']; }, $all_rows), $cat_id);
 $slides = array();
 $truncated = false;
-while ($row = pwg_db_fetch_assoc($res)) {
+foreach ($all_rows as $row) {
     if (count($slides) >= $MAX) { $truncated = true; break; }
     $img = '';
     try {
@@ -81,8 +85,7 @@ while ($row = pwg_db_fetch_assoc($res)) {
     if ($img === '') continue;
     $title = $row['name'] ? $row['name'] : pathinfo($row['file'], PATHINFO_FILENAME);
     // Attention : ne pas nommer cette variable $page (globale de Piwigo, utilisée par get_root_url())
-    $pic_url = make_picture_url(array('image_id' => (int)$row['id'], 'image_file' => $row['file']));
-    if (strpos($pic_url, 'http') !== 0) $pic_url = $base_url . ltrim($pic_url, '/');
+    $pic_url = osmme_picture_page_url($row['id'], $row['file'], isset($albums_for[(int)$row['id']]) ? $albums_for[(int)$row['id']] : null, $base_url);
     $slides[] = array(
         'id'   => (int)$row['id'],
         'img'  => $img,

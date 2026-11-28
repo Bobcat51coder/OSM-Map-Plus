@@ -39,6 +39,7 @@ $cfg  = array(
     'root'   => $root,
     'points' => $root . 'plugins/osm_map/osmme-points.php' . ($cat > 0 ? '?cat_id=' . $cat : ''),
     'photo'  => $root . 'plugins/osm_map/osmme-photo.php',
+    'cat'    => (int)$cat,
     'home'   => make_index_url(),
 );
 $title = (isset($conf['gallery_title']) ? $conf['gallery_title'] : 'Piwigo');
@@ -271,7 +272,7 @@ header('Cache-Control: no-store, max-age=0');
     var popup = new maplibregl.Popup({ maxWidth: '320px' }).setLngLat(coords)
       .setHTML('<div class="ph-pop" style="color:#888">Chargement…</div>').addTo(map);
     var shown = ids.slice(0, 100);
-    fetch(CFG.photo + '?ids=' + shown.join(','), { credentials: 'same-origin' })
+    fetch(CFG.photo + '?ids=' + shown.join(',') + (CFG.cat ? '&cat_id=' + CFG.cat : ''), { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (list) {
         var h = '<div class="ph-pop"><div class="m" style="margin:0 0 6px"><strong>' + ids.length + ' photos</strong> à cet endroit</div>' +

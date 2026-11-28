@@ -32,9 +32,11 @@ foreach (['include/derivative_params.inc.php','include/derivative_std_params.inc
 // absolues (racine du site comprise), y compris celles de make_picture_url().
 set_make_full_url();
 $base_url = get_root_url();
+include_once(dirname(__FILE__) . '/include/picture_url.inc.php');
+$prefer_cat = isset($_GET['cat_id']) ? (int)$_GET['cat_id'] : 0;   // album filtré sur la carte (contexte de navigation)
 
 // Helper : construire les données d'une photo
-function osmme_build_photo_data($row, $base_url) {
+function osmme_build_photo_data($row, $base_url, $album = null) {
     $thumb = '';
     try {
         $src   = new SrcImage($row);
@@ -51,8 +53,7 @@ function osmme_build_photo_data($row, $base_url) {
         }
     }
     $title    = $row['name'] ? $row['name'] : pathinfo($row['file'], PATHINFO_FILENAME);
-    $page_url = make_picture_url(array('image_id' => (int)$row['id'], 'image_file' => $row['file']));
-    if (strpos($page_url, 'http') !== 0) $page_url = $base_url . ltrim($page_url, '/');
+    $page_url = osmme_picture_page_url($row['id'], $row['file'], $album, $base_url);
     return array(
         'id'            => (int)$row['id'],
         'name'          => htmlspecialchars($title, ENT_QUOTES),
@@ -82,8 +83,12 @@ if (!empty($_GET['ids'])) {
 
     $result = pwg_query($query);
     $photos = array();
+    $albums = osmme_pick_albums($ids, $prefer_cat);
     while ($row = pwg_db_fetch_assoc($result)) {
-        $photos[] = osmme_build_photo_data($row, $base_url);
+        $album = isset($albums[(int)$row['id']]) ? $albums[(int)$row['id']] : null;
+        // le nom d'album affiché est celui du contexte de navigation
+        if ($album) $row['album_name'] = $album['name'];
+        $photos[] = osmme_build_photo_data($row, $base_url, $album);
     }
     echo json_encode($photos);
     exit;
@@ -109,5 +114,8 @@ $row    = pwg_db_fetch_assoc($result);
 
 if (!$row) { echo json_encode(array('error' => 'not found')); exit; }
 
-echo json_encode(osmme_build_photo_data($row, $base_url));
+$albums = osmme_pick_albums(array($id), $prefer_cat);
+$album  = isset($albums[$id]) ? $albums[$id] : null;
+if ($album) $row['album_name'] = $album['name'];
+echo json_encode(osmme_build_photo_data($row, $base_url, $album));
 exit;

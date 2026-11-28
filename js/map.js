@@ -503,7 +503,7 @@ var OSMMap = (function () {
     if (all.length > 100) _thumbTimer = setTimeout(_flushThumbs, 60);
     if (!ids.length || !window.OSM_PHOTO_URL) return;
     ids.forEach(function (id) { _thumbAsked[id] = 1; });
-    fetch(window.OSM_PHOTO_URL + '?ids=' + ids.join(','), { credentials: 'same-origin' })
+    fetch(window.OSM_PHOTO_URL + '?ids=' + ids.join(',') + _photoCat(), { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (list) {
         var got = {};
@@ -594,7 +594,7 @@ var OSMMap = (function () {
           var photoUrl = window.OSM_PHOTO_URL;
           if (photoUrl && !photo.name) {
             self.bindPopup('<div style="padding:8px;color:#888;font-size:12px;">Chargement…</div>', { maxWidth: 260 }).openPopup();
-            fetch(photoUrl + '?id=' + photo.id, { credentials: 'same-origin' })
+            fetch(photoUrl + '?id=' + photo.id + _photoCat(), { credentials: 'same-origin' })
               .then(function(r) { return r.json(); })
               .then(function(data) {
                 photo.name          = data.name;
@@ -623,6 +623,12 @@ var OSMMap = (function () {
       _updatePanelFromBounds();
     }
     requestAnimationFrame(addChunk);
+  }
+
+  // Album filtré sur la carte (contexte de navigation des liens vers les photos)
+  function _photoCat() {
+    var m = /[?&]cat_id=(\d+)/.exec(window.OSM_POINTS_URL || '');
+    return m ? '&cat_id=' + m[1] : '';
   }
 
   // Reconstruit l'URL page depuis l'id si absente du payload JSON (payload minimal)
@@ -699,7 +705,7 @@ var OSMMap = (function () {
       if (!photoUrl) { _renderPanel(toShow); return; }
 
       var ids = needsLoad.map(function(p) { return p.id; }).join(',');
-      fetch(photoUrl + '?ids=' + ids, { credentials: 'same-origin' })
+      fetch(photoUrl + '?ids=' + ids + _photoCat(), { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(details) {
           // Mettre en cache les détails dans les objets photo

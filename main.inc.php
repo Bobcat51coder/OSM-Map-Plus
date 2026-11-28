@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: OSM Map Plus
-Version: 1.1.0
+Version: 1.1.1
 Description: Carte OpenStreetMap pour Piwigo : clustering, 7 fonds de carte, vue 3D, vignettes, diaporama, géotaggage par lot et unitaire, lieux favoris, audit GPS/EXIF, affichage haut/bas/masqué par album. Compatible tous thèmes.
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1073
 Author: Bobcat-Fr
@@ -35,7 +35,7 @@ Has Settings: true
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // --- Définition du plugin ---
 define('OSM_MAP_PATH', PHPWG_PLUGINS_PATH . 'osm_map/');
-define('OSM_MAP_VERSION', '1.1.0');
+define('OSM_MAP_VERSION', '1.1.1');
 // Paramètre anti-cache des fichiers JS/CSS (change à chaque mise à jour des fichiers)
 define('OSM_MAP_ASSET_V', OSM_MAP_VERSION . '.' . (int)@filemtime(__FILE__));
 
@@ -69,6 +69,7 @@ function osmme_init_conf() {
         'osm_map_photo_height' => '220',
         'osm_map_hide_if_osm' => '0',
         'osm_map_position'    => 'bottom',
+        'osm_map_position_home' => '',
         'osm_map_carto_api_key' => '',
     );
     foreach ($defaults as $key => $val) {
@@ -257,9 +258,13 @@ function osmme_album_positions() {
 
 // Position effective de la grande carte pour un album : le réglage de l'album l'emporte sur le réglage
 // général ; « en haut » devient « en bas » si piwigo-openstreetmap est actif (il affiche déjà sa carte en haut).
-function osmme_map_position($cat_id = 0) {
+function osmme_map_position($cat_id = 0, $is_home = false) {
     global $conf;
     $pos = (isset($conf['osm_map_position']) && osmme_valid_pos($conf['osm_map_position'])) ? $conf['osm_map_position'] : 'bottom';
+    // Page d'accueil : réglage propre (vide = suit le réglage général)
+    if ($is_home && isset($conf['osm_map_position_home']) && osmme_valid_pos($conf['osm_map_position_home'])) {
+        $pos = $conf['osm_map_position_home'];
+    }
     if ($cat_id > 0) {
         $a = osmme_album_positions();
         if (isset($a[$cat_id]) && osmme_valid_pos($a[$cat_id])) $pos = $a[$cat_id];
@@ -288,7 +293,9 @@ function osmme_inject_map_block() {
 
     // Position (ou absence d'affichage) : réglage de l'album, sinon réglage général
     $osmme_cat = !empty($page['category']['id']) ? (int)$page['category']['id'] : 0;
-    $osmme_pos = osmme_map_position($osmme_cat);
+    // Page d'accueil = liste des albums racine : ni album, ni vue « à plat »
+    $osmme_home = ($osmme_cat === 0 && empty($page['flat']) && in_array($section, array('categories', ''), true));
+    $osmme_pos = osmme_map_position($osmme_cat, $osmme_home);
     if ($osmme_pos === 'none') return;
 
     $root   = get_root_url();

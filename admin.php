@@ -55,6 +55,9 @@ if (isset($_POST['submit_osm'])) {
     conf_update_param('osm_map_photo_height', max(150, min(800, (int)($_POST['osm_map_photo_height'] ?? 220))));
     conf_update_param('osm_map_unit_height', max(150, min(800,  (int)($_POST['osm_map_unit_height'] ?? 280))));
     // champ désactivé (absent du POST) quand piwigo-openstreetmap est actif : on garde alors le choix enregistré
+    if (isset($_POST['osm_map_position_home'])) {
+        conf_update_param('osm_map_position_home', in_array($_POST['osm_map_position_home'], array('top', 'bottom', 'none'), true) ? $_POST['osm_map_position_home'] : '');
+    }
     if (isset($_POST['osm_map_position'])) {
         conf_update_param('osm_map_position', in_array($_POST['osm_map_position'], array('top', 'bottom', 'none'), true) ? $_POST['osm_map_position'] : 'bottom');
     }
@@ -79,6 +82,8 @@ $osm_edit_height  = isset($conf['osm_map_edit_height'])  ? (int)$conf['osm_map_e
 $osm_unit_height  = isset($conf['osm_map_unit_height'])  ? (int)$conf['osm_map_unit_height'] : 280;
 $osm_hide_if_osm  = isset($conf['osm_map_hide_if_osm'])  && $conf['osm_map_hide_if_osm'] == '1';
 $osm_position     = (isset($conf['osm_map_position']) && in_array($conf['osm_map_position'], array('top', 'bottom', 'none'), true)) ? $conf['osm_map_position'] : 'bottom';
+$osmme_lbl_home = array('top' => 'en haut', 'bottom' => 'en bas', 'none' => 'pas d\'affichage');
+$osm_position_home = (isset($conf['osm_map_position_home']) && in_array($conf['osm_map_position_home'], array('top', 'bottom', 'none'), true)) ? $conf['osm_map_position_home'] : '';
 $osm_native_active = isset($GLOBALS['pwg_loaded_plugins']['piwigo-openstreetmap']);
 $osm_carto_api_key = isset($conf['osm_map_carto_api_key']) ? $conf['osm_map_carto_api_key'] : '';
 
@@ -225,6 +230,22 @@ ob_start();
         <option value="top" <?= $osm_position === 'top' ? 'selected' : '' ?>>En haut de la page</option>
         <option value="bottom" <?= $osm_position === 'bottom' ? 'selected' : '' ?>>En bas de la page</option>
         <option value="none" <?= $osm_position === 'none' ? 'selected' : '' ?>>Pas d'affichage</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Position sur la page d'accueil -->
+  <div class="osm-admin-row">
+    <div class="osm-admin-label">
+      <strong>Affichage de la carte sur la page d'accueil</strong>
+      <p class="description">Réglage propre à la page d'accueil de la galerie (liste des albums racine). « Identique à Affichage de la carte de la galerie » : la page d'accueil suit le réglage ci-dessus, comme toutes les pages d'albums. Un album peut toujours avoir son propre réglage.</p>
+    </div>
+    <div class="osm-admin-field">
+      <select name="osm_map_position_home">
+        <option value="" <?= $osm_position_home === '' ? 'selected' : '' ?>>Identique à « Affichage de la carte de la galerie » (actuellement : <?= $osmme_lbl_home[$osm_position] ?>)</option>
+        <option value="top" <?= $osm_position_home === 'top' ? 'selected' : '' ?>>En haut de la page</option>
+        <option value="bottom" <?= $osm_position_home === 'bottom' ? 'selected' : '' ?>>En bas de la page</option>
+        <option value="none" <?= $osm_position_home === 'none' ? 'selected' : '' ?>>Pas d'affichage</option>
       </select>
     </div>
   </div>
@@ -382,6 +403,7 @@ $osmme_ep  = get_root_url() . 'plugins/osm_map/osmme-albumpos.php';
   <div style="padding:14px 16px;">
     <p style="margin:0 0 10px;">
       Réglage général : <strong><?= $osmme_lbl[$osm_position] ?></strong><?= ($osm_native_active && $osm_position === 'top') ? ' <em>(traité comme « En bas » : piwigo-openstreetmap est actif)</em>' : '' ?>.
+      <?php if ($osm_position_home !== ''): ?>Page d'accueil : <strong><?= $osmme_lbl[$osm_position_home] ?></strong>. <?php endif ?>
       <strong><?= $osmme_nb_follow ?></strong> album(s) le suivent.
       <strong><?= $osmme_nb_over ?></strong> album(s) ont un réglage propre :
       <?= $osmme_cnt['top'] ?> en haut · <?= $osmme_cnt['bottom'] ?> en bas · <?= $osmme_cnt['none'] ?> sans carte.
